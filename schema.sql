@@ -1,0 +1,52 @@
+-- WaffleStack Database Schema
+-- Run this in the Supabase SQL Editor to set up the database.
+-- Update this file whenever the schema changes.
+
+-- Users
+create table public.users (
+  id         uuid primary key default gen_random_uuid(),
+  email      text not null unique,
+  created_at timestamptz not null default now(),
+  active     boolean not null default true
+);
+
+-- Preferences
+-- subreddits + stocks stay as arrays so n8n can deduplicate API calls across users efficiently.
+-- settings is a free-form JSONB blob for everything else — connectors, send_time, tone, etc.
+-- Adding new features never requires a schema migration, just a new key in settings.
+create table public.preferences (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references public.users(id) on delete cascade,
+  location   text,
+  subreddits text[] default '{}',
+  stocks     text[] default '{}',
+  settings   jsonb not null default '{"connectors":["weather","reddit","stocks"]}',
+  updated_at timestamptz not null default now()
+);
+
+create unique index preferences_user_id_idx on public.preferences(user_id);
+
+-- OAuth tokens (Phase 3 — Google Calendar, Gmail)
+create table public.oauth_tokens (
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid not null references public.users(id) on delete cascade,
+  provider      text not null,  -- 'google_calendar', 'gmail', etc.
+  access_token  text not null,
+  refresh_token text,
+  expires_at    timestamptz,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+
+create unique index oauth_tokens_user_provider_idx on public.oauth_tokens(user_id, provider);
+
+-- RLS: allow anonymous inserts for the signup form
+-- n8n uses the service role key and bypasses RLS entirely
+alter table public.users enable row level security;
+alter table public.preferences enable row level security;
+
+create policy "allow anon insert" on public.users
+  for insert to anon with check (true);
+
+create policy "allow anon insert" on public.preferences
+  for insert to anon with check (true);
