@@ -6,35 +6,45 @@ export default async function Navbar() {
   const { data: { user } } = await supabase.auth.getUser();
 
   return (
-    <nav className="border-b border-amber-200 bg-amber-50 px-4 py-3">
-      <div className="max-w-lg mx-auto flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 font-bold text-gray-900 hover:opacity-80">
-          <span>🧇</span>
-          <span>WaffleStack</span>
+    <nav className="bg-waffle-cream px-6 py-4 sticky top-0 z-50">
+      <div className="max-w-6xl mx-auto flex items-center justify-between">
+        <Link href="/" className="font-extrabold text-xl text-waffle-brown hover:opacity-80 tracking-tight">
+          WaffleStack
         </Link>
 
-        <div className="flex items-center gap-4 text-sm">
+        {!user && (
+          <div className="hidden md:flex items-center gap-8 text-sm font-semibold text-waffle-brown/60">
+            <a href="#how-it-works" className="hover:text-waffle-brown transition-colors">How it Works</a>
+            <a href="#interests" className="hover:text-waffle-brown transition-colors">Interests</a>
+            <a href="#signup" className="hover:text-waffle-brown transition-colors">Pricing</a>
+          </div>
+        )}
+
+        <div className="flex items-center gap-3 text-sm font-semibold">
           {user ? (
             <>
-              <Link href="/dashboard" className="text-gray-600 hover:text-gray-900">
+              <Link href="/dashboard" className="text-waffle-brown/70 hover:text-waffle-brown transition-colors">
                 Dashboard
               </Link>
               <form action="/api/auth/sign-out" method="POST">
-                <button type="submit" className="text-gray-400 hover:text-gray-600">
+                <button
+                  type="submit"
+                  className="text-waffle-brown/40 hover:text-waffle-brown transition-colors"
+                >
                   Sign out
                 </button>
               </form>
             </>
           ) : (
             <>
-              <Link href="/" className="text-gray-600 hover:text-gray-900">
-                Sign up
+              <Link href="/login" className="text-waffle-brown/70 hover:text-waffle-brown transition-colors">
+                Sign in
               </Link>
               <Link
-                href="/login"
-                className="bg-amber-400 hover:bg-amber-500 text-gray-900 font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                href="#signup"
+                className="bg-waffle-orange hover:bg-waffle-orange/90 text-white font-semibold px-5 py-2.5 rounded-full transition-colors text-sm"
               >
-                Sign in
+                Get Your Stack
               </Link>
             </>
           )}

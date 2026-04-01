@@ -1,6 +1,14 @@
 import type { Metadata } from "next";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import Navbar from "./components/Navbar";
+
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  style: ["normal", "italic"],
+  variable: "--font-jakarta",
+});
 
 export const metadata: Metadata = {
   title: "WaffleStack — Your personalised morning briefing",
@@ -9,8 +17,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className="bg-amber-50 text-gray-900 antialiased">
+    <html lang="en" className={jakarta.variable}>
+      <body className="bg-waffle-cream text-waffle-brown antialiased">
         <Navbar />
         {children}
       </body>

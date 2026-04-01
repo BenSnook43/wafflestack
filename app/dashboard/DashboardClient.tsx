@@ -2,50 +2,105 @@
 
 import { useState } from "react";
 
-const CONNECTORS = [
-  { id: "weather", label: "Weather", description: "Daily forecast for your location" },
-  { id: "reddit", label: "Reddit", description: "Top posts from your chosen subreddits" },
-  { id: "stocks", label: "Markets", description: "Price snapshot for your watchlist" },
-];
+// ── Types ───────────────────────────────────────────────────────────────────
+
+export type BlockType = "weather" | "reddit" | "stocks" | "hacker_news" | "separator";
+
+export interface Block {
+  id: string;
+  type: BlockType;
+  config: {
+    city?: string;
+    subreddits?: string[];
+    tickers?: string[];
+  };
+}
 
 interface Props {
   email: string;
   userId: string;
   active: boolean;
-  location: string;
-  subreddits: string;
-  stocks: string;
-  connectors: string[];
+  blocks: Block[];
 }
 
-export default function DashboardClient(props: Props) {
-  const [location, setLocation] = useState(props.location);
-  const [subreddits, setSubreddits] = useState(props.subreddits);
-  const [stocks, setStocks] = useState(props.stocks);
-  const [connectors, setConnectors] = useState(props.connectors);
-  const [active, setActive] = useState(props.active);
-  const [saveStatus, setSaveStatus] = useState<"idle" | "loading" | "saved" | "error">("idle");
-  const [errorMsg, setErrorMsg] = useState("");
+// ── Block display metadata ───────────────────────────────────────────────────
 
-  function toggleConnector(id: string) {
-    setConnectors((prev) =>
-      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]
-    );
+const BLOCK_META: Record<BlockType, { emoji: React.ReactNode; label: string }> = {
+  weather:     { emoji: "⛅", label: "Weather" },
+  reddit:      { emoji: <span className="font-black text-orange-500">↑</span>, label: "Reddit" },
+  stocks:      { emoji: "📈", label: "Markets" },
+  hacker_news: { emoji: <span className="font-extrabold bg-orange-600 text-white w-5 h-5 flex items-center justify-center rounded text-[10px]">Y</span>, label: "Hacker News" },
+  separator:   { emoji: "—", label: "Separator" },
+};
+
+function blockSummary(block: Block): string {
+  switch (block.type) {
+    case "weather":     return block.config.city ? `📍 ${block.config.city}` : "No city set";
+    case "reddit":      return block.config.subreddits?.length ? block.config.subreddits.map((s) => `r/${s}`).join(", ") : "No subreddits";
+    case "stocks":      return block.config.tickers?.length ? block.config.tickers.join(", ") : "No tickers";
+    case "hacker_news": return "Top stories";
+    case "separator":   return "Visual divider";
+  }
+}
+
+function uid() {
+  return Math.random().toString(36).slice(2, 10);
+}
+
+// ── Main component ───────────────────────────────────────────────────────────
+
+export default function DashboardClient(props: Props) {
+  const [blocks, setBlocks] = useState<Block[]>(props.blocks);
+  const [active, setActive] = useState(props.active);
+  const [showPicker, setShowPicker] = useState(false);
+  const [editingBlock, setEditingBlock] = useState<Block | null>(null);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "loading" | "saved" | "error">("idle");
+
+  function removeBlock(id: string) {
+    setBlocks((prev) => prev.filter((b) => b.id !== id));
   }
 
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault();
+  function moveBlock(id: string, dir: "up" | "down") {
+    setBlocks((prev) => {
+      const idx = prev.findIndex((b) => b.id === id);
+      if (dir === "up" && idx === 0) return prev;
+      if (dir === "down" && idx === prev.length - 1) return prev;
+      const next = [...prev];
+      const swap = dir === "up" ? idx - 1 : idx + 1;
+      [next[idx], next[swap]] = [next[swap], next[idx]];
+      return next;
+    });
+  }
+
+  function addBlock(block: Block) {
+    setBlocks((prev) => [...prev, block]);
+    setShowPicker(false);
+  }
+
+  function saveEditedBlock(updated: Block) {
+    setBlocks((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
+    setEditingBlock(null);
+  }
+
+  async function handleSave() {
     setSaveStatus("loading");
-    setErrorMsg("");
+
+    // Derive flat fields for n8n backward compatibility
+    const weatherBlock = blocks.find((b) => b.type === "weather");
+    const redditBlock = blocks.find((b) => b.type === "reddit");
+    const stocksBlock = blocks.find((b) => b.type === "stocks");
+    const connectors = blocks
+      .filter((b) => b.type !== "separator")
+      .map((b) => b.type);
 
     const res = await fetch("/api/preferences", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        location,
-        subreddits: subreddits.split(",").map((s) => s.trim().toLowerCase().replace(/^r\//, "")).filter(Boolean),
-        stocks: stocks.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean),
-        settings: { connectors },
+        location: weatherBlock?.config.city ?? null,
+        subreddits: redditBlock?.config.subreddits ?? [],
+        stocks: stocksBlock?.config.tickers ?? [],
+        settings: { connectors, blocks },
       }),
     });
 
@@ -53,8 +108,6 @@ export default function DashboardClient(props: Props) {
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus("idle"), 2500);
     } else {
-      const data = await res.json().catch(() => ({}));
-      setErrorMsg(data.error ?? "Failed to save. Please try again.");
       setSaveStatus("error");
     }
   }
@@ -75,35 +128,39 @@ export default function DashboardClient(props: Props) {
   }
 
   return (
-    <main className="min-h-screen px-4 py-12">
-      <div className="max-w-lg mx-auto space-y-8">
-        {/* Header */}
-        <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <div className="text-3xl">🧇</div>
-            <h1 className="text-2xl font-bold tracking-tight">Your briefing</h1>
-            <p className="text-sm text-gray-500">{props.email}</p>
+    <main className="min-h-screen bg-waffle-pale">
+      {/* ── Header ── */}
+      <div className="bg-waffle-cream border-b border-waffle-brown/8">
+        <div className="max-w-2xl mx-auto px-6 py-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-extrabold text-waffle-brown">Your Digest</h1>
+            <p className="text-xs text-waffle-brown/40 mt-0.5">{props.email}</p>
           </div>
           <button
             onClick={handleSignOut}
-            className="text-sm text-gray-400 hover:text-gray-600 underline mt-1"
+            className="text-xs text-waffle-brown/40 hover:text-waffle-brown transition-colors font-semibold"
           >
             Sign out
           </button>
         </div>
+      </div>
 
-        {/* Pause toggle */}
-        <div className="flex items-center justify-between p-4 rounded-lg border border-gray-200 bg-white">
+      <div className="max-w-2xl mx-auto px-6 py-8 space-y-4">
+
+        {/* ── Pause toggle ── */}
+        <div className="bg-white rounded-2xl border border-waffle-brown/8 px-5 py-4 flex items-center justify-between shadow-sm">
           <div>
-            <p className="text-sm font-medium">{active ? "Briefings active" : "Briefings paused"}</p>
-            <p className="text-xs text-gray-500 mt-0.5">
-              {active ? "You receive one email every morning." : "No emails until you resume."}
+            <p className="text-sm font-bold text-waffle-brown">
+              {active ? "Briefings active" : "Briefings paused"}
+            </p>
+            <p className="text-xs text-waffle-brown/45 mt-0.5">
+              {active ? "One email every morning at 7:00 AM." : "No emails until you resume."}
             </p>
           </div>
           <button
             onClick={handleTogglePause}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              active ? "bg-amber-400" : "bg-gray-300"
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
+              active ? "bg-waffle-orange" : "bg-waffle-brown/20"
             }`}
           >
             <span
@@ -114,91 +171,389 @@ export default function DashboardClient(props: Props) {
           </button>
         </div>
 
-        {/* Preferences form */}
-        <form onSubmit={handleSave} className="space-y-5">
-          <div>
-            <label className="block text-sm font-medium mb-1" htmlFor="location">Location</label>
-            <input
-              id="location"
-              type="text"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="London"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-1" htmlFor="subreddits">
-              Subreddits <span className="text-gray-400 font-normal">(comma-separated)</span>
-            </label>
-            <input
-              id="subreddits"
-              type="text"
-              value={subreddits}
-              onChange={(e) => setSubreddits(e.target.value)}
-              placeholder="technology, investing, worldnews"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-1" htmlFor="stocks">
-              Stock watchlist <span className="text-gray-400 font-normal">(comma-separated tickers)</span>
-            </label>
-            <input
-              id="stocks"
-              type="text"
-              value={stocks}
-              onChange={(e) => setStocks(e.target.value)}
-              placeholder="AAPL, TSLA, NVDA"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-            />
-          </div>
-
-          <div>
-            <p className="block text-sm font-medium mb-2">Include in my briefing</p>
-            <div className="space-y-2">
-              {CONNECTORS.map(({ id, label, description }) => (
-                <label key={id} className="flex items-start gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={connectors.includes(id)}
-                    onChange={() => toggleConnector(id)}
-                    className="mt-0.5 accent-amber-500"
-                  />
-                  <span>
-                    <span className="text-sm font-medium">{label}</span>
-                    <span className="text-sm text-gray-500 ml-1.5">{description}</span>
-                  </span>
-                </label>
-              ))}
+        {/* ── Block list ── */}
+        <div className="space-y-1">
+          {blocks.length === 0 && (
+            <div className="bg-white rounded-2xl border-2 border-dashed border-waffle-brown/10 px-6 py-12 text-center text-waffle-brown/30 text-sm font-medium">
+              Your digest is empty. Add some sources below.
             </div>
-          </div>
-
-          {saveStatus === "error" && (
-            <p className="text-sm text-red-600">{errorMsg}</p>
           )}
 
-          <button
-            type="submit"
-            disabled={saveStatus === "loading"}
-            className="w-full bg-amber-400 hover:bg-amber-500 disabled:opacity-50 text-gray-900 font-semibold py-2.5 rounded-lg text-sm transition-colors"
-          >
-            {saveStatus === "loading" ? "Saving…" : saveStatus === "saved" ? "Saved!" : "Save preferences"}
-          </button>
-        </form>
+          {blocks.map((block, idx) => (
+            <BlockCard
+              key={block.id}
+              block={block}
+              isFirst={idx === 0}
+              isLast={idx === blocks.length - 1}
+              onEdit={() => setEditingBlock(block)}
+              onRemove={() => removeBlock(block.id)}
+              onMoveUp={() => moveBlock(block.id, "up")}
+              onMoveDown={() => moveBlock(block.id, "down")}
+            />
+          ))}
+        </div>
 
-        {/* Unsubscribe */}
-        <div className="pt-4 border-t border-gray-200 text-center">
+        {/* ── Add block button ── */}
+        <button
+          onClick={() => setShowPicker(true)}
+          className="w-full bg-white hover:bg-waffle-pale border-2 border-dashed border-waffle-brown/15 hover:border-waffle-orange/40 rounded-2xl py-4 text-sm font-semibold text-waffle-brown/50 hover:text-waffle-orange transition-all flex items-center justify-center gap-2"
+        >
+          <span className="text-lg leading-none">+</span> Add to your digest
+        </button>
+
+        {/* ── Save button ── */}
+        <div className="pt-2">
+          <button
+            onClick={handleSave}
+            disabled={saveStatus === "loading"}
+            className="w-full bg-waffle-orange hover:bg-waffle-orange/90 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl transition-colors"
+          >
+            {saveStatus === "loading" ? "Saving…" : saveStatus === "saved" ? "Stack saved! ✓" : "Save Stack"}
+          </button>
+          {saveStatus === "error" && (
+            <p className="text-xs text-red-600 text-center mt-2">Failed to save. Please try again.</p>
+          )}
+        </div>
+
+        {/* ── Unsubscribe ── */}
+        <div className="text-center pt-2">
           <a
             href={`/unsubscribe?uid=${props.userId}`}
-            className="text-xs text-gray-400 hover:text-gray-600 underline"
+            className="text-xs text-waffle-brown/30 hover:text-waffle-brown/60 underline transition-colors"
           >
             Unsubscribe permanently
           </a>
         </div>
       </div>
+
+      {/* ── Source picker modal ── */}
+      {(showPicker || editingBlock !== null) && (
+        <SourcePickerModal
+          editingBlock={editingBlock}
+          onAdd={addBlock}
+          onUpdate={saveEditedBlock}
+          onClose={() => {
+            setShowPicker(false);
+            setEditingBlock(null);
+          }}
+        />
+      )}
     </main>
+  );
+}
+
+// ── BlockCard ────────────────────────────────────────────────────────────────
+
+function BlockCard({
+  block,
+  isFirst,
+  isLast,
+  onEdit,
+  onRemove,
+  onMoveUp,
+  onMoveDown,
+}: {
+  block: Block;
+  isFirst: boolean;
+  isLast: boolean;
+  onEdit: () => void;
+  onRemove: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+}) {
+  const meta = BLOCK_META[block.type];
+
+  if (block.type === "separator") {
+    return (
+      <div className="flex items-center gap-3 py-2 px-4 group">
+        <div className="flex-1 h-px bg-waffle-brown/10" />
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <ControlBtn onClick={onRemove} title="Remove" danger>✕</ControlBtn>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border border-waffle-brown/8 px-5 py-4 flex items-start gap-4 shadow-sm group">
+      <div className="text-2xl leading-none mt-0.5 flex-shrink-0 w-8 flex items-center justify-center">
+        {meta.emoji}
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <p className="font-bold text-waffle-brown text-sm">{meta.label}</p>
+        <p className="text-xs text-waffle-brown/45 mt-0.5 truncate">{blockSummary(block)}</p>
+      </div>
+
+      <div className="flex items-center gap-1 flex-shrink-0">
+        <ControlBtn onClick={onRemove} title="Remove" danger>✕</ControlBtn>
+        <ControlBtn onClick={onMoveUp} title="Move up" disabled={isFirst}>↑</ControlBtn>
+        <ControlBtn onClick={onMoveDown} title="Move down" disabled={isLast}>↓</ControlBtn>
+        <button
+          onClick={onEdit}
+          className="text-xs font-bold text-waffle-brown/50 hover:text-waffle-brown bg-waffle-pale hover:bg-waffle-golden/20 px-3 py-1.5 rounded-lg transition-colors ml-1"
+        >
+          Edit
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ControlBtn({
+  onClick,
+  title,
+  danger,
+  disabled,
+  children,
+}: {
+  onClick: () => void;
+  title: string;
+  danger?: boolean;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      disabled={disabled}
+      className={`w-7 h-7 rounded-lg text-xs font-bold flex items-center justify-center transition-colors disabled:opacity-20 ${
+        danger
+          ? "text-waffle-brown/30 hover:bg-red-50 hover:text-red-500"
+          : "text-waffle-brown/40 hover:bg-waffle-pale hover:text-waffle-brown"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ── Source Picker Modal ──────────────────────────────────────────────────────
+
+const SOURCE_TYPES: { type: BlockType; emoji: React.ReactNode; label: string }[] = [
+  { type: "weather",     emoji: "⛅", label: "Weather" },
+  { type: "stocks",      emoji: "📈", label: "Stocks" },
+  { type: "reddit",      emoji: <span className="font-black text-orange-500 text-xl">↑</span>, label: "Reddit" },
+  { type: "hacker_news", emoji: <span className="font-extrabold bg-orange-600 text-white w-8 h-8 flex items-center justify-center rounded text-sm">Y</span>, label: "Hacker News" },
+  { type: "separator",   emoji: <span className="font-bold text-waffle-brown/40 text-xl">—</span>, label: "Separator" },
+];
+
+function SourcePickerModal({
+  editingBlock,
+  onAdd,
+  onUpdate,
+  onClose,
+}: {
+  editingBlock: Block | null;
+  onAdd: (block: Block) => void;
+  onUpdate: (block: Block) => void;
+  onClose: () => void;
+}) {
+  const [pickerStep, setPickerStep] = useState<"grid" | "config">(
+    editingBlock ? "config" : "grid"
+  );
+  const [selectedType, setSelectedType] = useState<BlockType | null>(
+    editingBlock?.type ?? null
+  );
+  const [city, setCity] = useState(editingBlock?.config.city ?? "");
+  const [tickers, setTickers] = useState(
+    editingBlock?.config.tickers?.join(", ") ?? ""
+  );
+  const [subreddits, setSubreddits] = useState<string[]>(
+    editingBlock?.config.subreddits ?? []
+  );
+  const [customSub, setCustomSub] = useState("");
+
+  function selectType(type: BlockType) {
+    if (type === "separator") {
+      onAdd({ id: uid(), type: "separator", config: {} });
+      return;
+    }
+    setSelectedType(type);
+    setPickerStep("config");
+  }
+
+  function addCustomSub() {
+    const cleaned = customSub.trim().toLowerCase().replace(/^r\//, "");
+    if (cleaned && !subreddits.includes(cleaned)) {
+      setSubreddits((prev) => [...prev, cleaned]);
+      setCustomSub("");
+    }
+  }
+
+  function handleConfirm() {
+    if (!selectedType) return;
+
+    const config: Block["config"] = {};
+    if (selectedType === "weather") config.city = city.trim();
+    if (selectedType === "stocks") {
+      config.tickers = tickers.split(",").map((t) => t.trim().toUpperCase()).filter(Boolean);
+    }
+    if (selectedType === "reddit") config.subreddits = subreddits;
+
+    const block: Block = {
+      id: editingBlock?.id ?? uid(),
+      type: selectedType,
+      config,
+    };
+
+    if (editingBlock) {
+      onUpdate(block);
+    } else {
+      onAdd(block);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-waffle-espresso/40 backdrop-blur-sm px-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-3xl shadow-2xl w-full max-w-xl max-h-[85vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Modal header */}
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-waffle-brown/8">
+          <div className="flex items-center gap-3">
+            {pickerStep === "config" && !editingBlock && (
+              <button
+                onClick={() => setPickerStep("grid")}
+                className="text-sm font-semibold text-waffle-brown/50 hover:text-waffle-brown transition-colors"
+              >
+                ← Back
+              </button>
+            )}
+            <h2 className="font-extrabold text-waffle-brown text-base">
+              {pickerStep === "grid"
+                ? "Add to your digest"
+                : editingBlock
+                ? `Edit ${BLOCK_META[selectedType!]?.label}`
+                : `Configure ${BLOCK_META[selectedType!]?.label}`}
+            </h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full bg-waffle-pale hover:bg-waffle-golden/30 flex items-center justify-center text-waffle-brown/50 hover:text-waffle-brown transition-colors font-bold text-sm"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Grid step */}
+        {pickerStep === "grid" && (
+          <div className="p-6">
+            <div className="grid grid-cols-3 gap-3">
+              {SOURCE_TYPES.map(({ type, emoji, label }) => (
+                <button
+                  key={type}
+                  onClick={() => selectType(type)}
+                  className="flex flex-col items-center gap-3 bg-waffle-pale hover:bg-waffle-golden/20 border border-waffle-brown/8 hover:border-waffle-orange/30 rounded-2xl p-5 transition-all group"
+                >
+                  <span className="text-3xl leading-none flex items-center justify-center w-10 h-10">
+                    {emoji}
+                  </span>
+                  <span className="text-sm font-bold text-waffle-brown group-hover:text-waffle-espresso">
+                    {label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Config step */}
+        {pickerStep === "config" && selectedType && (
+          <div className="p-6 space-y-5">
+            {selectedType === "weather" && (
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-waffle-brown">City</label>
+                <input
+                  type="text"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder="e.g. London"
+                  autoFocus
+                  className="w-full border border-waffle-brown/15 rounded-xl px-4 py-3 text-sm bg-waffle-cream text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:ring-2 focus:ring-waffle-orange"
+                />
+              </div>
+            )}
+
+            {selectedType === "stocks" && (
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-waffle-brown">Stock tickers</label>
+                <input
+                  type="text"
+                  value={tickers}
+                  onChange={(e) => setTickers(e.target.value)}
+                  placeholder="AAPL, TSLA, NVDA"
+                  autoFocus
+                  className="w-full border border-waffle-brown/15 rounded-xl px-4 py-3 text-sm bg-waffle-cream text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:ring-2 focus:ring-waffle-orange"
+                />
+                <p className="text-xs text-waffle-brown/40">Comma-separated ticker symbols</p>
+              </div>
+            )}
+
+            {selectedType === "reddit" && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-waffle-brown">Subreddits</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={customSub}
+                      onChange={(e) => setCustomSub(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && addCustomSub()}
+                      placeholder="e.g. r/technology"
+                      autoFocus
+                      className="flex-1 border border-waffle-brown/15 rounded-xl px-4 py-3 text-sm bg-waffle-cream text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:ring-2 focus:ring-waffle-orange"
+                    />
+                    <button
+                      type="button"
+                      onClick={addCustomSub}
+                      className="px-4 py-3 bg-waffle-pale rounded-xl text-waffle-brown font-semibold text-sm hover:bg-waffle-golden/30 transition-colors"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+                {subreddits.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {subreddits.map((sub) => (
+                      <span
+                        key={sub}
+                        className="flex items-center gap-1.5 bg-waffle-pale border border-waffle-golden/30 rounded-full px-3 py-1.5 text-sm font-semibold text-waffle-brown"
+                      >
+                        r/{sub}
+                        <button
+                          onClick={() => setSubreddits((prev) => prev.filter((s) => s !== sub))}
+                          className="text-waffle-brown/40 hover:text-red-500 transition-colors leading-none"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {selectedType === "hacker_news" && (
+              <p className="text-sm text-waffle-brown/60 bg-waffle-pale rounded-xl p-4">
+                Adds the top stories from Hacker News to your morning digest. No configuration needed.
+              </p>
+            )}
+
+            <button
+              onClick={handleConfirm}
+              className="w-full bg-waffle-orange hover:bg-waffle-orange/90 text-white font-bold py-3.5 rounded-xl transition-colors"
+            >
+              {editingBlock ? "Update block" : "Add to digest"}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

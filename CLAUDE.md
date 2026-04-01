@@ -67,6 +67,8 @@ Webhook payload shape:
 - **Mac Mini first** — self-host n8n locally until there are paying users who'd notice downtime
 - **Cloudflare Tunnel** — no port forwarding, no static IP required
 - **Keep scope lean** — get weather + Reddit + stocks + email working before adding connectors
+- **Email voice: Morning Brew-style, not a data report** — Haiku prompts must produce witty, concise, human-sounding prose. The output should feel like a smart friend summarising the news, not a dashboard printout. Inject light humour and personality; avoid dry bullet dumps.
+- **Referral program is a launch feature, not a Phase 4 afterthought** — WaffleStack's personalisation pitch ("get your own version built around your life") is unusually shareable. Build referral mechanics into the UI from day one. Start tiers at 3–5 referrals with achievable rewards (e.g. a free month). Economically sound at $3–5/mo.
 
 ## Cost reference
 
