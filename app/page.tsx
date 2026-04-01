@@ -36,7 +36,7 @@ export default function Home() {
       body: JSON.stringify({
         email,
         location,
-        subreddits: subreddits.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean),
+        subreddits: subreddits.split(",").map((s) => s.trim().toLowerCase().replace(/^r\//, "")).filter(Boolean),
         stocks: stocks.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean),
         settings: { connectors },
       }),

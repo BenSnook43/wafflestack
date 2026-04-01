@@ -43,7 +43,7 @@ export default function DashboardClient(props: Props) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         location,
-        subreddits: subreddits.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean),
+        subreddits: subreddits.split(",").map((s) => s.trim().toLowerCase().replace(/^r\//, "")).filter(Boolean),
         stocks: stocks.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean),
         settings: { connectors },
       }),
