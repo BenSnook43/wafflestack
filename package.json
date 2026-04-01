@@ -8,6 +8,7 @@
     "start": "node_modules/.bin/next start"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.10.0",
     "@supabase/supabase-js": "^2.49.4",
     "next": "15.2.9",
     "react": "^19.0.0",

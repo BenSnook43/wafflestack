@@ -50,3 +50,21 @@ create policy "allow anon insert" on public.users
 
 create policy "allow anon insert" on public.preferences
   for insert to anon with check (true);
+
+-- RLS: authenticated users can read and update their own records
+-- Note: auth.jwt() ->> 'email' reads the email from the Supabase session JWT
+create policy "users: read own" on public.users
+  for select to authenticated
+  using (email = auth.jwt() ->> 'email');
+
+create policy "users: update own" on public.users
+  for update to authenticated
+  using (email = auth.jwt() ->> 'email');
+
+create policy "preferences: read own" on public.preferences
+  for select to authenticated
+  using (user_id = (select id from public.users where email = auth.jwt() ->> 'email'));
+
+create policy "preferences: update own" on public.preferences
+  for update to authenticated
+  using (user_id = (select id from public.users where email = auth.jwt() ->> 'email'));

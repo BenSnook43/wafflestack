@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { validateSubreddits } from "@/lib/validate-subreddits";
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
@@ -9,6 +10,17 @@ export async function POST(req: NextRequest) {
 
   if (!email || typeof email !== "string" || !email.includes("@")) {
     return NextResponse.json({ error: "A valid email is required." }, { status: 400 });
+  }
+
+  // Validate subreddits before saving
+  if (Array.isArray(subreddits) && subreddits.length > 0) {
+    const invalid = await validateSubreddits(subreddits);
+    if (invalid.length > 0) {
+      return NextResponse.json(
+        { error: `These subreddits don't exist: ${invalid.join(", ")}` },
+        { status: 400 }
+      );
+    }
   }
 
   // Upsert user — re-submitting updates preferences and reactivates if previously unsubscribed
