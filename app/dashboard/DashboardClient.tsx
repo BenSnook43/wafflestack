@@ -104,7 +104,8 @@ export default function DashboardClient(props: Props) {
         location: weatherBlock?.config.city ?? null,
         subreddits: redditBlock?.config.subreddits ?? [],
         stocks: stocksBlock?.config.tickers ?? [],
-        settings: { connectors, blocks, rss_feeds: rssBlock?.config.feeds ?? [] },
+        rss_feeds: rssBlock?.config.feeds ?? [],
+        settings: { connectors, blocks },
       }),
     });
 

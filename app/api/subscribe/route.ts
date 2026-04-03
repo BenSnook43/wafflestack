@@ -6,7 +6,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ error: "Invalid request." }, { status: 400 });
 
-  const { email, location, subreddits, stocks, settings } = body;
+  const { email, location, subreddits, stocks, rss_feeds, settings } = body;
 
   if (!email || typeof email !== "string" || !email.includes("@")) {
     return NextResponse.json({ error: "A valid email is required." }, { status: 400 });
@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
         location: location ?? null,
         subreddits: Array.isArray(subreddits) ? subreddits : [],
         stocks: Array.isArray(stocks) ? stocks : [],
+        rss_feeds: Array.isArray(rss_feeds) ? rss_feeds : [],
         settings: settings && typeof settings === "object" ? settings : { connectors: ["weather", "reddit", "stocks"] },
         updated_at: new Date().toISOString(),
       },

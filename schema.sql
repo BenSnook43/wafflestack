@@ -20,6 +20,7 @@ create table public.preferences (
   location   text,
   subreddits text[] default '{}',
   stocks     text[] default '{}',
+  rss_feeds  text[] default '{}',
   settings   jsonb not null default '{"connectors":["weather","reddit","stocks"]}',
   updated_at timestamptz not null default now()
 );
