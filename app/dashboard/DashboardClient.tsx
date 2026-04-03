@@ -407,7 +407,12 @@ function SourcePickerModal({
       config.tickers = tickers.split(",").map((t) => t.trim().toUpperCase()).filter(Boolean);
     }
     if (selectedType === "reddit") config.subreddits = subreddits;
-    if (selectedType === "rss") config.feeds = feeds;
+    if (selectedType === "rss") {
+      // Auto-flush any URL typed but not yet added via the Add button
+      const pendingUrl = customFeed.trim();
+      const allFeeds = pendingUrl && !feeds.includes(pendingUrl) ? [...feeds, pendingUrl] : feeds;
+      config.feeds = allFeeds;
+    }
 
     const block: Block = {
       id: editingBlock?.id ?? uid(),
@@ -572,6 +577,7 @@ function SourcePickerModal({
                       value={customFeed}
                       onChange={(e) => setCustomFeed(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && addFeed()}
+                      onBlur={addFeed}
                       placeholder="https://example.com/feed.xml"
                       autoFocus
                       className="flex-1 border border-waffle-brown/15 rounded-xl px-4 py-3 text-sm bg-waffle-cream text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:ring-2 focus:ring-waffle-orange"
