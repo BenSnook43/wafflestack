@@ -4,7 +4,7 @@ import { useState } from "react";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
-export type BlockType = "weather" | "reddit" | "stocks" | "hacker_news" | "separator";
+export type BlockType = "weather" | "reddit" | "stocks" | "hacker_news" | "rss" | "separator";
 
 export interface Block {
   id: string;
@@ -13,6 +13,7 @@ export interface Block {
     city?: string;
     subreddits?: string[];
     tickers?: string[];
+    feeds?: string[];
   };
 }
 
@@ -30,6 +31,7 @@ const BLOCK_META: Record<BlockType, { emoji: React.ReactNode; label: string }> =
   reddit:      { emoji: <span className="font-black text-orange-500">↑</span>, label: "Reddit" },
   stocks:      { emoji: "📈", label: "Markets" },
   hacker_news: { emoji: <span className="font-extrabold bg-orange-600 text-white w-5 h-5 flex items-center justify-center rounded text-[10px]">Y</span>, label: "Hacker News" },
+  rss:         { emoji: "📡", label: "RSS Feeds" },
   separator:   { emoji: "—", label: "Separator" },
 };
 
@@ -39,6 +41,7 @@ function blockSummary(block: Block): string {
     case "reddit":      return block.config.subreddits?.length ? block.config.subreddits.map((s) => `r/${s}`).join(", ") : "No subreddits";
     case "stocks":      return block.config.tickers?.length ? block.config.tickers.join(", ") : "No tickers";
     case "hacker_news": return "Top stories";
+    case "rss":         return block.config.feeds?.length ? block.config.feeds.join(", ") : "No feeds added";
     case "separator":   return "Visual divider";
   }
 }
@@ -89,6 +92,7 @@ export default function DashboardClient(props: Props) {
     const weatherBlock = blocks.find((b) => b.type === "weather");
     const redditBlock = blocks.find((b) => b.type === "reddit");
     const stocksBlock = blocks.find((b) => b.type === "stocks");
+    const rssBlock = blocks.find((b) => b.type === "rss");
     const connectors = blocks
       .filter((b) => b.type !== "separator")
       .map((b) => b.type);
@@ -100,7 +104,7 @@ export default function DashboardClient(props: Props) {
         location: weatherBlock?.config.city ?? null,
         subreddits: redditBlock?.config.subreddits ?? [],
         stocks: stocksBlock?.config.tickers ?? [],
-        settings: { connectors, blocks },
+        settings: { connectors, blocks, rss_feeds: rssBlock?.config.feeds ?? [] },
       }),
     });
 
@@ -336,6 +340,7 @@ const SOURCE_TYPES: { type: BlockType; emoji: React.ReactNode; label: string }[]
   { type: "stocks",      emoji: "📈", label: "Stocks" },
   { type: "reddit",      emoji: <span className="font-black text-orange-500 text-xl">↑</span>, label: "Reddit" },
   { type: "hacker_news", emoji: <span className="font-extrabold bg-orange-600 text-white w-8 h-8 flex items-center justify-center rounded text-sm">Y</span>, label: "Hacker News" },
+  { type: "rss",         emoji: "📡", label: "RSS Feeds" },
   { type: "separator",   emoji: <span className="font-bold text-waffle-brown/40 text-xl">—</span>, label: "Separator" },
 ];
 
@@ -364,6 +369,8 @@ function SourcePickerModal({
     editingBlock?.config.subreddits ?? []
   );
   const [customSub, setCustomSub] = useState("");
+  const [feeds, setFeeds] = useState<string[]>(editingBlock?.config.feeds ?? []);
+  const [customFeed, setCustomFeed] = useState("");
 
   function selectType(type: BlockType) {
     if (type === "separator") {
@@ -382,6 +389,14 @@ function SourcePickerModal({
     }
   }
 
+  function addFeed() {
+    const url = customFeed.trim();
+    if (url && !feeds.includes(url)) {
+      setFeeds((prev) => [...prev, url]);
+      setCustomFeed("");
+    }
+  }
+
   function handleConfirm() {
     if (!selectedType) return;
 
@@ -391,6 +406,7 @@ function SourcePickerModal({
       config.tickers = tickers.split(",").map((t) => t.trim().toUpperCase()).filter(Boolean);
     }
     if (selectedType === "reddit") config.subreddits = subreddits;
+    if (selectedType === "rss") config.feeds = feeds;
 
     const block: Block = {
       id: editingBlock?.id ?? uid(),
@@ -543,6 +559,50 @@ function SourcePickerModal({
               <p className="text-sm text-waffle-brown/60 bg-waffle-pale rounded-xl p-4">
                 Adds the top stories from Hacker News to your morning digest. No configuration needed.
               </p>
+            )}
+
+            {selectedType === "rss" && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-waffle-brown">Feed URLs</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      value={customFeed}
+                      onChange={(e) => setCustomFeed(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && addFeed()}
+                      placeholder="https://example.com/feed.xml"
+                      autoFocus
+                      className="flex-1 border border-waffle-brown/15 rounded-xl px-4 py-3 text-sm bg-waffle-cream text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:ring-2 focus:ring-waffle-orange"
+                    />
+                    <button
+                      type="button"
+                      onClick={addFeed}
+                      className="px-4 py-3 bg-waffle-pale rounded-xl text-waffle-brown font-semibold text-sm hover:bg-waffle-golden/30 transition-colors"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+                {feeds.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    {feeds.map((feed) => (
+                      <span
+                        key={feed}
+                        className="flex items-center justify-between gap-2 bg-waffle-pale border border-waffle-golden/30 rounded-xl px-3 py-2 text-xs font-medium text-waffle-brown"
+                      >
+                        <span className="truncate">{feed}</span>
+                        <button
+                          onClick={() => setFeeds((prev) => prev.filter((f) => f !== feed))}
+                          className="text-waffle-brown/40 hover:text-red-500 transition-colors flex-shrink-0 leading-none"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
 
             <button
