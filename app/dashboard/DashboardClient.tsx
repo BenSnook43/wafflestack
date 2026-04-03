@@ -406,7 +406,11 @@ function SourcePickerModal({
     if (selectedType === "stocks") {
       config.tickers = tickers.split(",").map((t) => t.trim().toUpperCase()).filter(Boolean);
     }
-    if (selectedType === "reddit") config.subreddits = subreddits;
+    if (selectedType === "reddit") {
+      const pendingSub = customSub.trim().toLowerCase().replace(/^r\//, "");
+      const allSubs = pendingSub && !subreddits.includes(pendingSub) ? [...subreddits, pendingSub] : subreddits;
+      config.subreddits = allSubs;
+    }
     if (selectedType === "rss") {
       // Auto-flush any URL typed but not yet added via the Add button
       const pendingUrl = customFeed.trim();
@@ -527,6 +531,7 @@ function SourcePickerModal({
                       value={customSub}
                       onChange={(e) => setCustomSub(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && addCustomSub()}
+                      onBlur={addCustomSub}
                       placeholder="e.g. r/technology"
                       autoFocus
                       className="flex-1 border border-waffle-brown/15 rounded-xl px-4 py-3 text-sm bg-waffle-cream text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:ring-2 focus:ring-waffle-orange"
