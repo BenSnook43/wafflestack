@@ -7,22 +7,23 @@ import { Suspense } from "react";
 function UnsubscribeContent() {
   const searchParams = useSearchParams();
   const uid = searchParams.get("uid");
+  const email = searchParams.get("email");
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
 
   async function handleUnsubscribe() {
-    if (!uid) return;
+    if (!uid && !email) return;
     setStatus("loading");
 
     const res = await fetch("/api/unsubscribe", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ uid }),
+      body: JSON.stringify(uid ? { uid } : { email }),
     });
 
     setStatus(res.ok ? "done" : "error");
   }
 
-  if (!uid) {
+  if (!uid && !email) {
     return (
       <div className="text-center space-y-3">
         <div className="text-4xl">🧇</div>
