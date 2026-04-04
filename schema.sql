@@ -11,18 +11,20 @@ create table public.users (
 );
 
 -- Preferences
--- subreddits + stocks stay as arrays so n8n can deduplicate API calls across users efficiently.
--- settings is a free-form JSONB blob for everything else — connectors, send_time, tone, etc.
--- Adding new features never requires a schema migration, just a new key in settings.
+-- Each connector gets its own column — n8n checks IS NOT NULL / non-empty to decide what to fetch.
+-- section_order controls the display order of sections in the email.
+-- settings is reserved for future non-connector preferences (send_time, tone, formatting).
 create table public.preferences (
-  id         uuid primary key default gen_random_uuid(),
-  user_id    uuid not null references public.users(id) on delete cascade,
-  location   text,
-  subreddits text[] default '{}',
-  stocks     text[] default '{}',
-  rss_feeds  text[] default '{}',
-  settings   jsonb not null default '{"connectors":["weather","reddit","stocks"]}',
-  updated_at timestamptz not null default now()
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid not null references public.users(id) on delete cascade,
+  location      text,
+  subreddits    text[] default '{}',
+  stocks        text[] default '{}',
+  rss_feeds     text[] default '{}',
+  hacker_news   boolean not null default false,
+  section_order text[] default '{}',
+  settings      jsonb not null default '{}',
+  updated_at    timestamptz not null default now()
 );
 
 create unique index preferences_user_id_idx on public.preferences(user_id);

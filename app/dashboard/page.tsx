@@ -7,26 +7,41 @@ function deriveBlocks(prefs: {
   location?: string | null;
   subreddits?: string[] | null;
   stocks?: string[] | null;
-  settings?: { connectors?: string[]; blocks?: Block[] } | null;
+  rss_feeds?: string[] | null;
+  hacker_news?: boolean | null;
+  section_order?: string[] | null;
 }): Block[] {
-  // If blocks already stored, use them
-  if (prefs.settings?.blocks?.length) return prefs.settings.blocks;
+  const available: Record<string, Block> = {};
 
-  // Otherwise derive from flat fields for existing users
-  const connectors = prefs.settings?.connectors ?? [];
+  if (prefs.location) {
+    available.weather = { id: "w1", type: "weather", config: { city: prefs.location } };
+  }
+  if (prefs.subreddits?.length) {
+    available.reddit = { id: "r1", type: "reddit", config: { subreddits: prefs.subreddits } };
+  }
+  if (prefs.stocks?.length) {
+    available.stocks = { id: "s1", type: "stocks", config: { tickers: prefs.stocks } };
+  }
+  if (prefs.rss_feeds?.length) {
+    available.rss = { id: "rss1", type: "rss", config: { feeds: prefs.rss_feeds } };
+  }
+  if (prefs.hacker_news) {
+    available.hacker_news = { id: "hn1", type: "hacker_news", config: {} };
+  }
+
+  // Respect section_order if provided, then append any remaining
+  const order = prefs.section_order ?? [];
   const blocks: Block[] = [];
+  const seen = new Set<string>();
 
-  if (connectors.includes("weather") && prefs.location) {
-    blocks.push({ id: "w1", type: "weather", config: { city: prefs.location } });
+  for (const key of order) {
+    if (available[key]) {
+      blocks.push(available[key]);
+      seen.add(key);
+    }
   }
-  if (connectors.includes("reddit") && prefs.subreddits?.length) {
-    blocks.push({ id: "r1", type: "reddit", config: { subreddits: prefs.subreddits } });
-  }
-  if (connectors.includes("stocks") && prefs.stocks?.length) {
-    blocks.push({ id: "s1", type: "stocks", config: { tickers: prefs.stocks } });
-  }
-  if (connectors.includes("hacker_news")) {
-    blocks.push({ id: "hn1", type: "hacker_news", config: {} });
+  for (const [key, block] of Object.entries(available)) {
+    if (!seen.has(key)) blocks.push(block);
   }
 
   return blocks;
@@ -46,7 +61,7 @@ export default async function DashboardPage() {
 
   const { data: prefs } = await supabase
     .from("preferences")
-    .select("location, subreddits, stocks, settings")
+    .select("location, subreddits, stocks, rss_feeds, hacker_news, section_order")
     .eq("user_id", userRecord?.id)
     .single();
 
@@ -54,7 +69,9 @@ export default async function DashboardPage() {
     location: prefs?.location,
     subreddits: prefs?.subreddits,
     stocks: prefs?.stocks,
-    settings: prefs?.settings as { connectors?: string[]; blocks?: Block[] } | null,
+    rss_feeds: prefs?.rss_feeds,
+    hacker_news: prefs?.hacker_news,
+    section_order: prefs?.section_order,
   });
 
   return (

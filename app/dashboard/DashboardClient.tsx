@@ -24,91 +24,105 @@ interface Props {
   blocks: Block[];
 }
 
-// ── Block display metadata ───────────────────────────────────────────────────
-
-const BLOCK_META: Record<BlockType, { emoji: React.ReactNode; label: string }> = {
-  weather:     { emoji: "⛅", label: "Weather" },
-  reddit:      { emoji: <span className="font-black text-orange-500">↑</span>, label: "Reddit" },
-  stocks:      { emoji: "📈", label: "Markets" },
-  hacker_news: { emoji: <span className="font-extrabold bg-orange-600 text-white w-5 h-5 flex items-center justify-center rounded text-[10px]">Y</span>, label: "Hacker News" },
-  rss:         { emoji: "📡", label: "RSS Feeds" },
-  separator:   { emoji: "—", label: "Separator" },
-};
-
-function blockSummary(block: Block): string {
-  switch (block.type) {
-    case "weather":     return block.config.city ? `📍 ${block.config.city}` : "No city set";
-    case "reddit":      return block.config.subreddits?.length ? block.config.subreddits.map((s) => `r/${s}`).join(", ") : "No subreddits";
-    case "stocks":      return block.config.tickers?.length ? block.config.tickers.join(", ") : "No tickers";
-    case "hacker_news": return "Top stories";
-    case "rss":         return block.config.feeds?.length ? block.config.feeds.join(", ") : "No feeds added";
-    case "separator":   return "Visual divider";
-  }
-}
+const PRESET_SUBS = ["technology", "science", "worldnews", "investing", "design", "philosophy"];
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
+// ── Derive flat state from blocks array ─────────────────────────────────────
+
+function blocksToState(blocks: Block[]) {
+  const weather = blocks.find((b) => b.type === "weather");
+  const stocks = blocks.find((b) => b.type === "stocks");
+  const reddit = blocks.find((b) => b.type === "reddit");
+  const rss = blocks.find((b) => b.type === "rss");
+  const hackerNews = blocks.some((b) => b.type === "hacker_news");
+
+  return {
+    weather: !!weather,
+    weatherCity: weather?.config.city ?? "",
+    stocks: !!stocks,
+    stockTickers: stocks?.config.tickers?.join(", ") ?? "",
+    subreddits: reddit?.config.subreddits ?? [],
+    customSub: "",
+    hackerNews,
+    rss: !!rss,
+    feeds: rss?.config.feeds ?? [],
+    customFeed: "",
+  };
+}
+
+type StackState = ReturnType<typeof blocksToState>;
+
+function stateToSavePayload(state: StackState) {
+  const sectionOrder: string[] = [];
+  if (state.weather) sectionOrder.push("weather");
+  if (state.stocks) sectionOrder.push("stocks");
+  if (state.subreddits.length > 0) sectionOrder.push("reddit");
+  if (state.hackerNews) sectionOrder.push("hacker_news");
+  if (state.feeds.length > 0) sectionOrder.push("rss");
+
+  return {
+    location: state.weather ? state.weatherCity || null : null,
+    subreddits: state.subreddits,
+    stocks: state.stocks
+      ? state.stockTickers.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean)
+      : [],
+    rss_feeds: state.feeds,
+    hacker_news: state.hackerNews,
+    section_order: sectionOrder,
+  };
+}
+
 // ── Main component ───────────────────────────────────────────────────────────
 
 export default function DashboardClient(props: Props) {
-  const [blocks, setBlocks] = useState<Block[]>(props.blocks);
+  const [stack, setStack] = useState<StackState>(() => blocksToState(props.blocks));
   const [active, setActive] = useState(props.active);
-  const [showPicker, setShowPicker] = useState(false);
-  const [editingBlock, setEditingBlock] = useState<Block | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "loading" | "saved" | "error">("idle");
 
-  function removeBlock(id: string) {
-    setBlocks((prev) => prev.filter((b) => b.id !== id));
+  function toggleSub(sub: string) {
+    setStack((s) => ({
+      ...s,
+      subreddits: s.subreddits.includes(sub)
+        ? s.subreddits.filter((r) => r !== sub)
+        : [...s.subreddits, sub],
+    }));
   }
 
-  function moveBlock(id: string, dir: "up" | "down") {
-    setBlocks((prev) => {
-      const idx = prev.findIndex((b) => b.id === id);
-      if (dir === "up" && idx === 0) return prev;
-      if (dir === "down" && idx === prev.length - 1) return prev;
-      const next = [...prev];
-      const swap = dir === "up" ? idx - 1 : idx + 1;
-      [next[idx], next[swap]] = [next[swap], next[idx]];
-      return next;
-    });
+  function addCustomSub() {
+    const cleaned = stack.customSub.trim().toLowerCase().replace(/^r\//, "");
+    if (cleaned && !stack.subreddits.includes(cleaned)) {
+      setStack((s) => ({ ...s, subreddits: [...s.subreddits, cleaned], customSub: "" }));
+    }
   }
 
-  function addBlock(block: Block) {
-    setBlocks((prev) => [...prev, block]);
-    setShowPicker(false);
+  function addFeed() {
+    const url = stack.customFeed.trim();
+    if (url && !stack.feeds.includes(url)) {
+      setStack((s) => ({ ...s, feeds: [...s.feeds, url], customFeed: "" }));
+    }
   }
 
-  function saveEditedBlock(updated: Block) {
-    setBlocks((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
-    setEditingBlock(null);
-  }
+  const hasAnyBlock =
+    stack.weather || stack.stocks || stack.subreddits.length > 0 || stack.hackerNews || stack.feeds.length > 0;
+
+  const stackItems = [
+    ...(stack.weather ? [`⛅ Weather — ${stack.weatherCity || "city TBD"}`] : []),
+    ...(stack.stocks ? [`📈 Stocks — ${stack.stockTickers || "tickers TBD"}`] : []),
+    ...stack.subreddits.map((s) => `↑ r/${s}`),
+    ...(stack.hackerNews ? ["🟠 Hacker News"] : []),
+    ...stack.feeds.map((f) => `📡 ${f}`),
+  ];
 
   async function handleSave() {
     setSaveStatus("loading");
-
-    // Derive flat fields for n8n backward compatibility
-    const weatherBlock = blocks.find((b) => b.type === "weather");
-    const redditBlock = blocks.find((b) => b.type === "reddit");
-    const stocksBlock = blocks.find((b) => b.type === "stocks");
-    const rssBlock = blocks.find((b) => b.type === "rss");
-    const connectors = blocks
-      .filter((b) => b.type !== "separator")
-      .map((b) => b.type);
-
     const res = await fetch("/api/preferences", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        location: weatherBlock?.config.city ?? null,
-        subreddits: redditBlock?.config.subreddits ?? [],
-        stocks: stocksBlock?.config.tickers ?? [],
-        rss_feeds: rssBlock?.config.feeds ?? [],
-        settings: { connectors, blocks },
-      }),
+      body: JSON.stringify(stateToSavePayload(stack)),
     });
-
     if (res.ok) {
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus("idle"), 2500);
@@ -133,499 +147,316 @@ export default function DashboardClient(props: Props) {
   }
 
   return (
-    <main className="min-h-screen bg-waffle-pale">
+    <main className="min-h-screen bg-waffle-cream">
       {/* ── Header ── */}
       <div className="bg-waffle-cream border-b border-waffle-brown/8">
-        <div className="max-w-2xl mx-auto px-6 py-6 flex items-center justify-between">
+        <div className="max-w-4xl mx-auto px-6 py-6 flex items-center justify-between">
           <div>
             <h1 className="text-xl font-extrabold text-waffle-brown">Your Digest</h1>
             <p className="text-xs text-waffle-brown/40 mt-0.5">{props.email}</p>
           </div>
-          <button
-            onClick={handleSignOut}
-            className="text-xs text-waffle-brown/40 hover:text-waffle-brown transition-colors font-semibold"
-          >
-            Sign out
-          </button>
+          <div className="flex items-center gap-4">
+            {/* Pause toggle */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-waffle-brown/50">
+                {active ? "Active" : "Paused"}
+              </span>
+              <button
+                onClick={handleTogglePause}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
+                  active ? "bg-waffle-orange" : "bg-waffle-brown/20"
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                    active ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </div>
+            <button
+              onClick={handleSignOut}
+              className="text-xs text-waffle-brown/40 hover:text-waffle-brown transition-colors font-semibold"
+            >
+              Sign out
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="max-w-2xl mx-auto px-6 py-8 space-y-4">
-
-        {/* ── Pause toggle ── */}
-        <div className="bg-white rounded-2xl border border-waffle-brown/8 px-5 py-4 flex items-center justify-between shadow-sm">
+      {/* ── Main content ── */}
+      <div className="max-w-4xl mx-auto px-6 py-8 grid md:grid-cols-[1fr_280px] gap-10 items-start">
+        {/* Left: node picker */}
+        <div className="space-y-8">
           <div>
-            <p className="text-sm font-bold text-waffle-brown">
-              {active ? "Briefings active" : "Briefings paused"}
-            </p>
-            <p className="text-xs text-waffle-brown/45 mt-0.5">
-              {active ? "One email every morning at 7:00 AM." : "No emails until you resume."}
+            <h2 className="text-3xl font-extrabold italic text-waffle-brown leading-tight mb-1">
+              Edit Your Stack.
+            </h2>
+            <p className="text-waffle-brown/55 text-sm">
+              Toggle nodes on or off. Changes are saved when you hit Save.
             </p>
           </div>
-          <button
-            onClick={handleTogglePause}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
-              active ? "bg-waffle-orange" : "bg-waffle-brown/20"
-            }`}
-          >
-            <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                active ? "translate-x-6" : "translate-x-1"
-              }`}
-            />
-          </button>
-        </div>
 
-        {/* ── Block list ── */}
-        <div className="space-y-1">
-          {blocks.length === 0 && (
-            <div className="bg-white rounded-2xl border-2 border-dashed border-waffle-brown/10 px-6 py-12 text-center text-waffle-brown/30 text-sm font-medium">
-              Your digest is empty. Add some sources below.
+          {/* Live Vitals */}
+          <section className="space-y-3">
+            <h3 className="text-xs font-bold text-waffle-brown/40 uppercase tracking-widest flex items-center gap-2">
+              <span>📡</span> Live Vitals
+            </h3>
+            <div className="grid grid-cols-2 gap-3">
+              <NodeCard
+                active={stack.weather}
+                onClick={() => setStack((s) => ({ ...s, weather: !s.weather }))}
+                icon="⛅"
+                label="Weather"
+              >
+                {stack.weather && (
+                  <input
+                    type="text"
+                    value={stack.weatherCity}
+                    onChange={(e) => setStack((s) => ({ ...s, weatherCity: e.target.value }))}
+                    onClick={(e) => e.stopPropagation()}
+                    placeholder="Enter city…"
+                    className="mt-2 w-full border-b border-waffle-brown/20 bg-transparent text-sm text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:border-waffle-orange py-1"
+                  />
+                )}
+              </NodeCard>
+
+              <NodeCard
+                active={stack.stocks}
+                onClick={() => setStack((s) => ({ ...s, stocks: !s.stocks }))}
+                icon="📈"
+                label="Stock Ticker"
+              >
+                {stack.stocks && (
+                  <input
+                    type="text"
+                    value={stack.stockTickers}
+                    onChange={(e) => setStack((s) => ({ ...s, stockTickers: e.target.value }))}
+                    onClick={(e) => e.stopPropagation()}
+                    placeholder="AAPL, TSLA…"
+                    className="mt-2 w-full border-b border-waffle-brown/20 bg-transparent text-sm text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:border-waffle-orange py-1"
+                  />
+                )}
+              </NodeCard>
             </div>
-          )}
+          </section>
 
-          {blocks.map((block, idx) => (
-            <BlockCard
-              key={block.id}
-              block={block}
-              isFirst={idx === 0}
-              isLast={idx === blocks.length - 1}
-              onEdit={() => setEditingBlock(block)}
-              onRemove={() => removeBlock(block.id)}
-              onMoveUp={() => moveBlock(block.id, "up")}
-              onMoveDown={() => moveBlock(block.id, "down")}
-            />
-          ))}
+          {/* Reddit Nodes */}
+          <section className="space-y-3">
+            <h3 className="text-xs font-bold text-waffle-brown/40 uppercase tracking-widest flex items-center gap-2">
+              <span className="font-black text-orange-500">↑</span> Reddit Nodes
+            </h3>
+            <div className="grid grid-cols-2 gap-3">
+              {PRESET_SUBS.map((sub) => (
+                <NodeCard
+                  key={sub}
+                  active={stack.subreddits.includes(sub)}
+                  onClick={() => toggleSub(sub)}
+                  icon={<span className="font-black text-orange-500 text-xl">↑</span>}
+                  label={`r/${sub}`}
+                />
+              ))}
+              {/* Show custom subs that aren't in presets */}
+              {stack.subreddits
+                .filter((s) => !PRESET_SUBS.includes(s))
+                .map((sub) => (
+                  <NodeCard
+                    key={sub}
+                    active={true}
+                    onClick={() => toggleSub(sub)}
+                    icon={<span className="font-black text-orange-500 text-xl">↑</span>}
+                    label={`r/${sub}`}
+                  />
+                ))}
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={stack.customSub}
+                onChange={(e) => setStack((s) => ({ ...s, customSub: e.target.value }))}
+                onKeyDown={(e) => e.key === "Enter" && addCustomSub()}
+                placeholder="+ Add subreddit (e.g. r/cooking)"
+                className="flex-1 border border-waffle-brown/15 rounded-xl px-4 py-2.5 text-sm bg-white text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:ring-2 focus:ring-waffle-orange"
+              />
+              <button
+                type="button"
+                onClick={addCustomSub}
+                className="px-4 py-2.5 bg-waffle-pale rounded-xl text-waffle-brown font-semibold text-sm hover:bg-waffle-golden/30 transition-colors"
+              >
+                Add
+              </button>
+            </div>
+          </section>
+
+          {/* The Deep End */}
+          <section className="space-y-3">
+            <h3 className="text-xs font-bold text-waffle-brown/40 uppercase tracking-widest flex items-center gap-2">
+              <span>🖥</span> The Deep End
+            </h3>
+            <div className="grid grid-cols-2 gap-3">
+              <NodeCard
+                active={stack.hackerNews}
+                onClick={() => setStack((s) => ({ ...s, hackerNews: !s.hackerNews }))}
+                icon={
+                  <span className="font-extrabold bg-orange-600 text-white w-7 h-7 flex items-center justify-center rounded text-xs">
+                    Y
+                  </span>
+                }
+                label="Hacker News"
+              />
+              <NodeCard
+                active={stack.rss}
+                onClick={() => setStack((s) => ({ ...s, rss: !s.rss, feeds: s.rss ? [] : s.feeds }))}
+                icon="📡"
+                label="RSS Feeds"
+              >
+                {stack.rss && (
+                  <div className="mt-2 space-y-2" onClick={(e) => e.stopPropagation()}>
+                    {stack.feeds.map((feed) => (
+                      <div
+                        key={feed}
+                        className="flex items-center justify-between gap-1 text-xs text-waffle-brown/60 bg-waffle-pale rounded-lg px-2 py-1.5"
+                      >
+                        <span className="truncate">{feed}</span>
+                        <button
+                          onClick={() => setStack((s) => ({ ...s, feeds: s.feeds.filter((f) => f !== feed) }))}
+                          className="text-waffle-brown/30 hover:text-red-500 transition-colors flex-shrink-0"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                    <div className="flex gap-1.5">
+                      <input
+                        type="url"
+                        value={stack.customFeed}
+                        onChange={(e) => setStack((s) => ({ ...s, customFeed: e.target.value }))}
+                        onKeyDown={(e) => e.key === "Enter" && addFeed()}
+                        onBlur={addFeed}
+                        placeholder="Feed URL…"
+                        className="flex-1 border-b border-waffle-brown/20 bg-transparent text-xs text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:border-waffle-orange py-1"
+                      />
+                      <button onClick={addFeed} className="text-xs font-semibold text-waffle-orange">
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </NodeCard>
+            </div>
+          </section>
         </div>
 
-        {/* ── Add block button ── */}
-        <button
-          onClick={() => setShowPicker(true)}
-          className="w-full bg-white hover:bg-waffle-pale border-2 border-dashed border-waffle-brown/15 hover:border-waffle-orange/40 rounded-2xl py-4 text-sm font-semibold text-waffle-brown/50 hover:text-waffle-orange transition-all flex items-center justify-center gap-2"
-        >
-          <span className="text-lg leading-none">+</span> Add to your digest
-        </button>
+        {/* Right: Your Stack sidebar */}
+        <aside className="hidden md:block sticky top-8">
+          <div className="bg-white rounded-2xl border border-waffle-brown/10 p-6 space-y-4 shadow-sm">
+            <h3 className="font-extrabold text-waffle-brown text-lg flex items-center gap-2">
+              Your Stack <span>🥞</span>
+            </h3>
+            {stackItems.length === 0 ? (
+              <div className="border-2 border-dashed border-waffle-brown/10 rounded-xl px-4 py-8 text-center text-waffle-brown/25 text-sm">
+                Pick some nodes to build your digest…
+              </div>
+            ) : (
+              <ul className="space-y-2">
+                {stackItems.map((item) => (
+                  <li
+                    key={item}
+                    className="flex items-center gap-3 bg-waffle-pale rounded-xl px-4 py-3 text-sm font-semibold text-waffle-brown"
+                  >
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            )}
 
-        {/* ── Save button ── */}
-        <div className="pt-2">
+            {/* Save button */}
+            <button
+              onClick={handleSave}
+              disabled={saveStatus === "loading"}
+              className="w-full bg-waffle-orange hover:bg-waffle-orange/90 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-colors text-sm"
+            >
+              {saveStatus === "loading" ? "Saving…" : saveStatus === "saved" ? "Saved ✓" : "Save Stack"}
+            </button>
+            {saveStatus === "error" && (
+              <p className="text-xs text-red-600 text-center">Failed to save. Try again.</p>
+            )}
+
+            <p className="text-xs text-waffle-brown/30 text-center">
+              Your digest is delivered at 7:00 AM
+            </p>
+          </div>
+
+          <div className="text-center mt-4">
+            <a
+              href={`/unsubscribe?uid=${props.userId}`}
+              className="text-xs text-waffle-brown/30 hover:text-waffle-brown/60 underline transition-colors"
+            >
+              Unsubscribe permanently
+            </a>
+          </div>
+        </aside>
+
+        {/* Mobile save button (below the nodes) */}
+        <div className="md:hidden space-y-3">
           <button
             onClick={handleSave}
             disabled={saveStatus === "loading"}
             className="w-full bg-waffle-orange hover:bg-waffle-orange/90 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl transition-colors"
           >
-            {saveStatus === "loading" ? "Saving…" : saveStatus === "saved" ? "Stack saved! ✓" : "Save Stack"}
+            {saveStatus === "loading" ? "Saving…" : saveStatus === "saved" ? "Saved ✓" : "Save Stack"}
           </button>
           {saveStatus === "error" && (
-            <p className="text-xs text-red-600 text-center mt-2">Failed to save. Please try again.</p>
+            <p className="text-xs text-red-600 text-center">Failed to save. Try again.</p>
           )}
-        </div>
-
-        {/* ── Unsubscribe ── */}
-        <div className="text-center pt-2">
-          <a
-            href={`/unsubscribe?uid=${props.userId}`}
-            className="text-xs text-waffle-brown/30 hover:text-waffle-brown/60 underline transition-colors"
-          >
-            Unsubscribe permanently
-          </a>
+          <div className="text-center">
+            <a
+              href={`/unsubscribe?uid=${props.userId}`}
+              className="text-xs text-waffle-brown/30 hover:text-waffle-brown/60 underline transition-colors"
+            >
+              Unsubscribe permanently
+            </a>
+          </div>
         </div>
       </div>
-
-      {/* ── Source picker modal ── */}
-      {(showPicker || editingBlock !== null) && (
-        <SourcePickerModal
-          editingBlock={editingBlock}
-          onAdd={addBlock}
-          onUpdate={saveEditedBlock}
-          onClose={() => {
-            setShowPicker(false);
-            setEditingBlock(null);
-          }}
-        />
-      )}
     </main>
   );
 }
 
-// ── BlockCard ────────────────────────────────────────────────────────────────
+// ── Node Card ──────────────────────────────────────────────────────────────
 
-function BlockCard({
-  block,
-  isFirst,
-  isLast,
-  onEdit,
-  onRemove,
-  onMoveUp,
-  onMoveDown,
-}: {
-  block: Block;
-  isFirst: boolean;
-  isLast: boolean;
-  onEdit: () => void;
-  onRemove: () => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
-}) {
-  const meta = BLOCK_META[block.type];
-
-  if (block.type === "separator") {
-    return (
-      <div className="flex items-center gap-3 py-2 px-4 group">
-        <div className="flex-1 h-px bg-waffle-brown/10" />
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <ControlBtn onClick={onRemove} title="Remove" danger>✕</ControlBtn>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-white rounded-2xl border border-waffle-brown/8 px-5 py-4 flex items-start gap-4 shadow-sm group">
-      <div className="text-2xl leading-none mt-0.5 flex-shrink-0 w-8 flex items-center justify-center">
-        {meta.emoji}
-      </div>
-
-      <div className="flex-1 min-w-0">
-        <p className="font-bold text-waffle-brown text-sm">{meta.label}</p>
-        <p className="text-xs text-waffle-brown/45 mt-0.5 truncate">{blockSummary(block)}</p>
-      </div>
-
-      <div className="flex items-center gap-1 flex-shrink-0">
-        <ControlBtn onClick={onRemove} title="Remove" danger>✕</ControlBtn>
-        <ControlBtn onClick={onMoveUp} title="Move up" disabled={isFirst}>↑</ControlBtn>
-        <ControlBtn onClick={onMoveDown} title="Move down" disabled={isLast}>↓</ControlBtn>
-        <button
-          onClick={onEdit}
-          className="text-xs font-bold text-waffle-brown/50 hover:text-waffle-brown bg-waffle-pale hover:bg-waffle-golden/20 px-3 py-1.5 rounded-lg transition-colors ml-1"
-        >
-          Edit
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function ControlBtn({
+function NodeCard({
+  active,
   onClick,
-  title,
-  danger,
-  disabled,
+  icon,
+  label,
   children,
 }: {
+  active: boolean;
   onClick: () => void;
-  title: string;
-  danger?: boolean;
-  disabled?: boolean;
-  children: React.ReactNode;
+  icon: React.ReactNode;
+  label: string;
+  children?: React.ReactNode;
 }) {
-  return (
-    <button
-      onClick={onClick}
-      title={title}
-      disabled={disabled}
-      className={`w-7 h-7 rounded-lg text-xs font-bold flex items-center justify-center transition-colors disabled:opacity-20 ${
-        danger
-          ? "text-waffle-brown/30 hover:bg-red-50 hover:text-red-500"
-          : "text-waffle-brown/40 hover:bg-waffle-pale hover:text-waffle-brown"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-// ── Source Picker Modal ──────────────────────────────────────────────────────
-
-const SOURCE_TYPES: { type: BlockType; emoji: React.ReactNode; label: string }[] = [
-  { type: "weather",     emoji: "⛅", label: "Weather" },
-  { type: "stocks",      emoji: "📈", label: "Stocks" },
-  { type: "reddit",      emoji: <span className="font-black text-orange-500 text-xl">↑</span>, label: "Reddit" },
-  { type: "hacker_news", emoji: <span className="font-extrabold bg-orange-600 text-white w-8 h-8 flex items-center justify-center rounded text-sm">Y</span>, label: "Hacker News" },
-  { type: "rss",         emoji: "📡", label: "RSS Feeds" },
-  { type: "separator",   emoji: <span className="font-bold text-waffle-brown/40 text-xl">—</span>, label: "Separator" },
-];
-
-function SourcePickerModal({
-  editingBlock,
-  onAdd,
-  onUpdate,
-  onClose,
-}: {
-  editingBlock: Block | null;
-  onAdd: (block: Block) => void;
-  onUpdate: (block: Block) => void;
-  onClose: () => void;
-}) {
-  const [pickerStep, setPickerStep] = useState<"grid" | "config">(
-    editingBlock ? "config" : "grid"
-  );
-  const [selectedType, setSelectedType] = useState<BlockType | null>(
-    editingBlock?.type ?? null
-  );
-  const [city, setCity] = useState(editingBlock?.config.city ?? "");
-  const [tickers, setTickers] = useState(
-    editingBlock?.config.tickers?.join(", ") ?? ""
-  );
-  const [subreddits, setSubreddits] = useState<string[]>(
-    editingBlock?.config.subreddits ?? []
-  );
-  const [customSub, setCustomSub] = useState("");
-  const [feeds, setFeeds] = useState<string[]>(editingBlock?.config.feeds ?? []);
-  const [customFeed, setCustomFeed] = useState("");
-
-  function selectType(type: BlockType) {
-    if (type === "separator") {
-      onAdd({ id: uid(), type: "separator", config: {} });
-      return;
-    }
-    setSelectedType(type);
-    setPickerStep("config");
-  }
-
-  function addCustomSub() {
-    const cleaned = customSub.trim().toLowerCase().replace(/^r\//, "");
-    if (cleaned && !subreddits.includes(cleaned)) {
-      setSubreddits((prev) => [...prev, cleaned]);
-      setCustomSub("");
-    }
-  }
-
-  function addFeed() {
-    const url = customFeed.trim();
-    if (url && !feeds.includes(url)) {
-      setFeeds((prev) => [...prev, url]);
-      setCustomFeed("");
-    }
-  }
-
-  function handleConfirm() {
-    if (!selectedType) return;
-
-    const config: Block["config"] = {};
-    if (selectedType === "weather") config.city = city.trim();
-    if (selectedType === "stocks") {
-      config.tickers = tickers.split(",").map((t) => t.trim().toUpperCase()).filter(Boolean);
-    }
-    if (selectedType === "reddit") {
-      const pendingSub = customSub.trim().toLowerCase().replace(/^r\//, "");
-      const allSubs = pendingSub && !subreddits.includes(pendingSub) ? [...subreddits, pendingSub] : subreddits;
-      config.subreddits = allSubs;
-    }
-    if (selectedType === "rss") {
-      // Auto-flush any URL typed but not yet added via the Add button
-      const pendingUrl = customFeed.trim();
-      const allFeeds = pendingUrl && !feeds.includes(pendingUrl) ? [...feeds, pendingUrl] : feeds;
-      config.feeds = allFeeds;
-    }
-
-    const block: Block = {
-      id: editingBlock?.id ?? uid(),
-      type: selectedType,
-      config,
-    };
-
-    if (editingBlock) {
-      onUpdate(block);
-    } else {
-      onAdd(block);
-    }
-  }
-
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-waffle-espresso/40 backdrop-blur-sm px-4"
-      onClick={onClose}
+      onClick={onClick}
+      className={`rounded-2xl border-2 p-4 cursor-pointer transition-all select-none ${
+        active
+          ? "border-waffle-orange bg-waffle-orange/5"
+          : "border-waffle-brown/10 bg-white hover:border-waffle-orange/40"
+      }`}
     >
-      <div
-        className="bg-white rounded-3xl shadow-2xl w-full max-w-xl max-h-[85vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Modal header */}
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-waffle-brown/8">
-          <div className="flex items-center gap-3">
-            {pickerStep === "config" && !editingBlock && (
-              <button
-                onClick={() => setPickerStep("grid")}
-                className="text-sm font-semibold text-waffle-brown/50 hover:text-waffle-brown transition-colors"
-              >
-                ← Back
-              </button>
-            )}
-            <h2 className="font-extrabold text-waffle-brown text-base">
-              {pickerStep === "grid"
-                ? "Add to your digest"
-                : editingBlock
-                ? `Edit ${BLOCK_META[selectedType!]?.label}`
-                : `Configure ${BLOCK_META[selectedType!]?.label}`}
-            </h2>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-waffle-pale hover:bg-waffle-golden/30 flex items-center justify-center text-waffle-brown/50 hover:text-waffle-brown transition-colors font-bold text-sm"
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Grid step */}
-        {pickerStep === "grid" && (
-          <div className="p-6">
-            <div className="grid grid-cols-3 gap-3">
-              {SOURCE_TYPES.map(({ type, emoji, label }) => (
-                <button
-                  key={type}
-                  onClick={() => selectType(type)}
-                  className="flex flex-col items-center gap-3 bg-waffle-pale hover:bg-waffle-golden/20 border border-waffle-brown/8 hover:border-waffle-orange/30 rounded-2xl p-5 transition-all group"
-                >
-                  <span className="text-3xl leading-none flex items-center justify-center w-10 h-10">
-                    {emoji}
-                  </span>
-                  <span className="text-sm font-bold text-waffle-brown group-hover:text-waffle-espresso">
-                    {label}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Config step */}
-        {pickerStep === "config" && selectedType && (
-          <div className="p-6 space-y-5">
-            {selectedType === "weather" && (
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-waffle-brown">City</label>
-                <input
-                  type="text"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  placeholder="e.g. London"
-                  autoFocus
-                  className="w-full border border-waffle-brown/15 rounded-xl px-4 py-3 text-sm bg-waffle-cream text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:ring-2 focus:ring-waffle-orange"
-                />
-              </div>
-            )}
-
-            {selectedType === "stocks" && (
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-waffle-brown">Stock tickers</label>
-                <input
-                  type="text"
-                  value={tickers}
-                  onChange={(e) => setTickers(e.target.value)}
-                  placeholder="AAPL, TSLA, NVDA"
-                  autoFocus
-                  className="w-full border border-waffle-brown/15 rounded-xl px-4 py-3 text-sm bg-waffle-cream text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:ring-2 focus:ring-waffle-orange"
-                />
-                <p className="text-xs text-waffle-brown/40">Comma-separated ticker symbols</p>
-              </div>
-            )}
-
-            {selectedType === "reddit" && (
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-waffle-brown">Subreddits</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={customSub}
-                      onChange={(e) => setCustomSub(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && addCustomSub()}
-                      onBlur={addCustomSub}
-                      placeholder="e.g. r/technology"
-                      autoFocus
-                      className="flex-1 border border-waffle-brown/15 rounded-xl px-4 py-3 text-sm bg-waffle-cream text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:ring-2 focus:ring-waffle-orange"
-                    />
-                    <button
-                      type="button"
-                      onClick={addCustomSub}
-                      className="px-4 py-3 bg-waffle-pale rounded-xl text-waffle-brown font-semibold text-sm hover:bg-waffle-golden/30 transition-colors"
-                    >
-                      Add
-                    </button>
-                  </div>
-                </div>
-                {subreddits.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {subreddits.map((sub) => (
-                      <span
-                        key={sub}
-                        className="flex items-center gap-1.5 bg-waffle-pale border border-waffle-golden/30 rounded-full px-3 py-1.5 text-sm font-semibold text-waffle-brown"
-                      >
-                        r/{sub}
-                        <button
-                          onClick={() => setSubreddits((prev) => prev.filter((s) => s !== sub))}
-                          className="text-waffle-brown/40 hover:text-red-500 transition-colors leading-none"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {selectedType === "hacker_news" && (
-              <p className="text-sm text-waffle-brown/60 bg-waffle-pale rounded-xl p-4">
-                Adds the top stories from Hacker News to your morning digest. No configuration needed.
-              </p>
-            )}
-
-            {selectedType === "rss" && (
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-waffle-brown">Feed URLs</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="url"
-                      value={customFeed}
-                      onChange={(e) => setCustomFeed(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && addFeed()}
-                      onBlur={addFeed}
-                      placeholder="https://example.com/feed.xml"
-                      autoFocus
-                      className="flex-1 border border-waffle-brown/15 rounded-xl px-4 py-3 text-sm bg-waffle-cream text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:ring-2 focus:ring-waffle-orange"
-                    />
-                    <button
-                      type="button"
-                      onClick={addFeed}
-                      className="px-4 py-3 bg-waffle-pale rounded-xl text-waffle-brown font-semibold text-sm hover:bg-waffle-golden/30 transition-colors"
-                    >
-                      Add
-                    </button>
-                  </div>
-                </div>
-                {feeds.length > 0 && (
-                  <div className="flex flex-col gap-2">
-                    {feeds.map((feed) => (
-                      <span
-                        key={feed}
-                        className="flex items-center justify-between gap-2 bg-waffle-pale border border-waffle-golden/30 rounded-xl px-3 py-2 text-xs font-medium text-waffle-brown"
-                      >
-                        <span className="truncate">{feed}</span>
-                        <button
-                          onClick={() => setFeeds((prev) => prev.filter((f) => f !== feed))}
-                          className="text-waffle-brown/40 hover:text-red-500 transition-colors flex-shrink-0 leading-none"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            <button
-              onClick={handleConfirm}
-              className="w-full bg-waffle-orange hover:bg-waffle-orange/90 text-white font-bold py-3.5 rounded-xl transition-colors"
-            >
-              {editingBlock ? "Update block" : "Add to digest"}
-            </button>
-          </div>
+      <div className="flex items-start justify-between mb-2">
+        <span className="text-2xl leading-none">{icon}</span>
+        {active && (
+          <span className="w-5 h-5 rounded-full bg-waffle-orange flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+            ✓
+          </span>
         )}
       </div>
+      <p className="font-bold text-waffle-brown text-sm">{label}</p>
+      {children}
     </div>
   );
 }

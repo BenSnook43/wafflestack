@@ -14,7 +14,7 @@ export async function PATCH(req: NextRequest) {
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ error: "Invalid request." }, { status: 400 });
 
-  const { location, subreddits, stocks, rss_feeds, settings, active } = body;
+  const { location, subreddits, stocks, rss_feeds, hacker_news, section_order, active } = body;
 
   // Look up user record by email
   const { data: userRecord, error: userErr } = await supabase
@@ -46,18 +46,21 @@ export async function PATCH(req: NextRequest) {
       .eq("id", userRecord.id);
   }
 
-  // Update preferences
-  const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  // Upsert preferences (creates row if first save after signup)
+  const updates: Record<string, unknown> = {
+    user_id: userRecord.id,
+    updated_at: new Date().toISOString(),
+  };
   if (location !== undefined) updates.location = location;
   if (Array.isArray(subreddits)) updates.subreddits = subreddits;
   if (Array.isArray(stocks)) updates.stocks = stocks;
   if (Array.isArray(rss_feeds)) updates.rss_feeds = rss_feeds;
-  if (settings && typeof settings === "object") updates.settings = settings;
+  if (typeof hacker_news === "boolean") updates.hacker_news = hacker_news;
+  if (Array.isArray(section_order)) updates.section_order = section_order;
 
   const { error: prefErr } = await supabase
     .from("preferences")
-    .update(updates)
-    .eq("user_id", userRecord.id);
+    .upsert(updates, { onConflict: "user_id" });
 
   if (prefErr) {
     console.error("Preferences update error:", prefErr);

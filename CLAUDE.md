@@ -60,6 +60,18 @@ Webhook payload shape:
 - Migrate n8n from Mac Mini to Hetzner/DO VPS when uptime becomes critical
 - Break-even is very early — costs ~$30/mo at 100 users
 
+## Preferences storage
+
+Each connector (weather, reddit, stocks, rss, hacker_news) gets its own top-level column in the `preferences` table. n8n checks whether a column is null/empty to decide what to fetch — no JSONB parsing needed in the workflow.
+
+`section_order text[]` is a separate column that controls what order sections appear in the email. It's advisory — if a connector column is empty, n8n skips it regardless of whether it appears in `section_order`.
+
+`settings jsonb` exists but is reserved for future non-connector preferences (send time, tone, formatting). It should not duplicate connector data.
+
+**Why not JSONB for everything?** We previously stored connector config inside `settings.blocks` (a JSONB array) and derived the flat columns on every save for n8n backward compatibility. This created two copies of the same data with no DB-level enforcement that they stay in sync. Any code path that wrote to one side but not the other would cause silent drift — the user's email would disagree with what the dashboard showed. Flat columns eliminate the dual-write entirely: one column, one truth, one place to read.
+
+**Rule of thumb:** if n8n reads it on every run, it gets a column. If only the frontend cares, JSONB is fine.
+
 ## Key decisions
 
 - **Use Haiku not Sonnet** — quality is sufficient for summarisation, 3x cheaper
