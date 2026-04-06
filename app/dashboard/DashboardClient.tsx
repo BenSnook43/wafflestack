@@ -22,6 +22,21 @@ interface Props {
   userId: string;
   active: boolean;
   blocks: Block[];
+  trialEndsAt: string | null;
+  subscriptionStatus: string;
+  emailsSent: number;
+}
+
+function subscriptionBadge(status: string, trialEndsAt: string | null): { label: string; color: string } {
+  if (status === "active") return { label: "Subscribed", color: "text-green-600" };
+  if (status === "cancelled") return { label: "Cancelled", color: "text-waffle-brown/40" };
+  if (status === "past_due") return { label: "Trial ended", color: "text-red-500" };
+  // trialing
+  if (trialEndsAt) {
+    const days = Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / 86_400_000));
+    return { label: `${days} day${days !== 1 ? "s" : ""} left in trial`, color: "text-waffle-orange" };
+  }
+  return { label: "Free trial", color: "text-waffle-orange" };
 }
 
 const PRESET_SUBS = ["technology", "science", "worldnews", "investing", "design", "philosophy"];
@@ -146,6 +161,8 @@ export default function DashboardClient(props: Props) {
     window.location.href = "/";
   }
 
+  const badge = subscriptionBadge(props.subscriptionStatus, props.trialEndsAt);
+
   return (
     <main className="min-h-screen bg-waffle-cream">
       {/* ── Header ── */}
@@ -153,7 +170,10 @@ export default function DashboardClient(props: Props) {
         <div className="max-w-4xl mx-auto px-6 py-6 flex items-center justify-between">
           <div>
             <h1 className="text-xl font-extrabold text-waffle-brown">Your Digest</h1>
-            <p className="text-xs text-waffle-brown/40 mt-0.5">{props.email}</p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <p className="text-xs text-waffle-brown/40">{props.email}</p>
+              <span className={`text-xs font-semibold ${badge.color}`}>{badge.label}</span>
+            </div>
           </div>
           <div className="flex items-center gap-4">
             {/* Pause toggle */}
@@ -385,6 +405,11 @@ export default function DashboardClient(props: Props) {
             <p className="text-xs text-waffle-brown/30 text-center">
               Your digest is delivered at 7:00 AM
             </p>
+            {props.emailsSent > 0 && (
+              <p className="text-xs text-waffle-brown/30 text-center">
+                {props.emailsSent} digest{props.emailsSent !== 1 ? "s" : ""} sent so far
+              </p>
+            )}
           </div>
 
           <div className="text-center mt-4">

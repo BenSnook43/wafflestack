@@ -3,11 +3,26 @@
 -- Update this file whenever the schema changes.
 
 -- Users
+-- `active` = user's own pause/unsubscribe toggle (user-controlled).
+-- `subscription_status` = billing state (system-controlled).
+-- n8n sends only to users where active=true AND subscription_status IN ('trialing','active').
 create table public.users (
-  id         uuid primary key default gen_random_uuid(),
-  email      text not null unique,
-  created_at timestamptz not null default now(),
-  active     boolean not null default true
+  id                      uuid primary key default gen_random_uuid(),
+  email                   text not null unique,
+  created_at              timestamptz not null default now(),
+  active                  boolean not null default true,
+
+  -- Billing / trial
+  trial_ends_at           timestamptz not null default (now() + interval '30 days'),
+  subscription_status     text not null default 'trialing'
+                          check (subscription_status in ('trialing','active','past_due','cancelled')),
+  emails_sent             integer not null default 0,
+  last_email_sent_at      timestamptz,
+  cancelled_at            timestamptz,
+
+  -- Stripe (Phase 4 — nullable until wired up)
+  stripe_customer_id      text unique,
+  stripe_subscription_id  text
 );
 
 -- Preferences

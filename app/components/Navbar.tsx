@@ -16,7 +16,7 @@ export default async function Navbar() {
           <div className="hidden md:flex items-center gap-8 text-sm font-semibold text-waffle-brown/60">
             <a href="#how-it-works" className="hover:text-waffle-brown transition-colors">How it Works</a>
             <a href="#interests" className="hover:text-waffle-brown transition-colors">Interests</a>
-            <a href="#signup" className="hover:text-waffle-brown transition-colors">Pricing</a>
+            <Link href="/pricing" className="hover:text-waffle-brown transition-colors">Pricing</Link>
           </div>
         )}
 
