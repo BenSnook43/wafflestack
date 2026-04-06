@@ -144,6 +144,7 @@ function sourceIcon(src: InspirationSource) {
 
 function sourceLabel(src: InspirationSource) {
   if (src.type === "hacker_news") return "Hacker News";
+  if (src.type === "weather") return "Weather";
   return src.label;
 }
 
