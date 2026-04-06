@@ -27,11 +27,132 @@ interface Props {
   emailsSent: number;
 }
 
+// ── Inspiration data ────────────────────────────────────────────────────────
+
+type InspirationSource =
+  | { type: "subreddit"; value: string; label: string }
+  | { type: "hacker_news" }
+  | { type: "ticker"; value: string; label: string }
+  | { type: "rss"; value: string; label: string }
+  | { type: "weather" };
+
+interface InspirationPack {
+  label: string;
+  emoji: string;
+  sources: InspirationSource[];
+}
+
+const INSPIRATION_PACKS: InspirationPack[] = [
+  {
+    label: "Tech",
+    emoji: "💻",
+    sources: [
+      { type: "subreddit", value: "technology", label: "r/technology" },
+      { type: "subreddit", value: "programming", label: "r/programming" },
+      { type: "subreddit", value: "MachineLearning", label: "r/MachineLearning" },
+      { type: "hacker_news" },
+    ],
+  },
+  {
+    label: "Investing",
+    emoji: "📈",
+    sources: [
+      { type: "ticker", value: "AAPL", label: "AAPL — Apple" },
+      { type: "ticker", value: "TSLA", label: "TSLA — Tesla" },
+      { type: "ticker", value: "SPY", label: "SPY — S&P 500 ETF" },
+      { type: "subreddit", value: "investing", label: "r/investing" },
+      { type: "subreddit", value: "stocks", label: "r/stocks" },
+    ],
+  },
+  {
+    label: "World News",
+    emoji: "🌍",
+    sources: [
+      { type: "subreddit", value: "worldnews", label: "r/worldnews" },
+      { type: "subreddit", value: "geopolitics", label: "r/geopolitics" },
+      { type: "rss", value: "https://feeds.bbci.co.uk/news/rss.xml", label: "BBC News" },
+      { type: "rss", value: "https://feeds.reuters.com/reuters/topNews", label: "Reuters" },
+    ],
+  },
+  {
+    label: "Design",
+    emoji: "🎨",
+    sources: [
+      { type: "subreddit", value: "design", label: "r/design" },
+      { type: "subreddit", value: "UXDesign", label: "r/UXDesign" },
+      { type: "subreddit", value: "graphic_design", label: "r/graphic_design" },
+      { type: "rss", value: "https://www.smashingmagazine.com/feed/", label: "Smashing Magazine" },
+    ],
+  },
+  {
+    label: "Science",
+    emoji: "🔬",
+    sources: [
+      { type: "subreddit", value: "science", label: "r/science" },
+      { type: "subreddit", value: "space", label: "r/space" },
+      { type: "subreddit", value: "biology", label: "r/biology" },
+      { type: "rss", value: "https://www.newscientist.com/feed/home/", label: "New Scientist" },
+    ],
+  },
+  {
+    label: "Crypto",
+    emoji: "₿",
+    sources: [
+      { type: "subreddit", value: "CryptoCurrency", label: "r/CryptoCurrency" },
+      { type: "subreddit", value: "Bitcoin", label: "r/Bitcoin" },
+      { type: "ticker", value: "BTC-USD", label: "BTC — Bitcoin" },
+      { type: "ticker", value: "ETH-USD", label: "ETH — Ethereum" },
+    ],
+  },
+  {
+    label: "Health",
+    emoji: "🏃",
+    sources: [
+      { type: "subreddit", value: "fitness", label: "r/fitness" },
+      { type: "subreddit", value: "nutrition", label: "r/nutrition" },
+      { type: "subreddit", value: "running", label: "r/running" },
+      { type: "rss", value: "https://examine.com/feed/", label: "Examine.com" },
+    ],
+  },
+  {
+    label: "Gaming",
+    emoji: "🎮",
+    sources: [
+      { type: "subreddit", value: "gaming", label: "r/gaming" },
+      { type: "subreddit", value: "gamedev", label: "r/gamedev" },
+      { type: "subreddit", value: "pcgaming", label: "r/pcgaming" },
+      { type: "rss", value: "https://www.rockpapershotgun.com/feed/", label: "Rock Paper Shotgun" },
+    ],
+  },
+];
+
+function sourceIcon(src: InspirationSource) {
+  if (src.type === "hacker_news") {
+    return (
+      <span className="font-extrabold bg-orange-600 text-white w-5 h-5 flex items-center justify-center rounded text-[10px] flex-shrink-0">
+        Y
+      </span>
+    );
+  }
+  if (src.type === "subreddit") {
+    return <span className="font-black text-orange-500 text-base leading-none flex-shrink-0">↑</span>;
+  }
+  if (src.type === "ticker") return <span className="flex-shrink-0">📈</span>;
+  if (src.type === "rss") return <span className="flex-shrink-0">📡</span>;
+  if (src.type === "weather") return <span className="flex-shrink-0">⛅</span>;
+}
+
+function sourceLabel(src: InspirationSource) {
+  if (src.type === "hacker_news") return "Hacker News";
+  return src.label;
+}
+
+// ── Badge ────────────────────────────────────────────────────────────────────
+
 function subscriptionBadge(status: string, trialEndsAt: string | null): { label: string; color: string } {
   if (status === "active") return { label: "Subscribed", color: "text-green-600" };
   if (status === "cancelled") return { label: "Cancelled", color: "text-waffle-brown/40" };
   if (status === "past_due") return { label: "Trial ended", color: "text-red-500" };
-  // trialing
   if (trialEndsAt) {
     const days = Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / 86_400_000));
     return { label: `${days} day${days !== 1 ? "s" : ""} left in trial`, color: "text-waffle-orange" };
@@ -90,12 +211,32 @@ function stateToSavePayload(state: StackState) {
   };
 }
 
+// ── Check if a source is already in the stack ────────────────────────────────
+
+function isInStack(src: InspirationSource, s: StackState): boolean {
+  switch (src.type) {
+    case "subreddit":
+      return s.subreddits.map((r) => r.toLowerCase()).includes(src.value.toLowerCase());
+    case "hacker_news":
+      return s.hackerNews;
+    case "ticker": {
+      const tickers = s.stockTickers.split(",").map((t) => t.trim().toUpperCase()).filter(Boolean);
+      return tickers.includes(src.value.toUpperCase());
+    }
+    case "rss":
+      return s.feeds.includes(src.value);
+    case "weather":
+      return s.weather;
+  }
+}
+
 // ── Main component ───────────────────────────────────────────────────────────
 
 export default function DashboardClient(props: Props) {
   const [stack, setStack] = useState<StackState>(() => blocksToState(props.blocks));
   const [active, setActive] = useState(props.active);
   const [saveStatus, setSaveStatus] = useState<"idle" | "loading" | "saved" | "error">("idle");
+  const [inspiredOpen, setInspiredOpen] = useState(false);
 
   function toggleSub(sub: string) {
     setStack((s) => ({
@@ -118,6 +259,31 @@ export default function DashboardClient(props: Props) {
     if (url && !stack.feeds.includes(url)) {
       setStack((s) => ({ ...s, feeds: [...s.feeds, url], customFeed: "" }));
     }
+  }
+
+  function addFromInspiration(src: InspirationSource) {
+    setStack((s) => {
+      switch (src.type) {
+        case "subreddit": {
+          if (s.subreddits.map((r) => r.toLowerCase()).includes(src.value.toLowerCase())) return s;
+          return { ...s, subreddits: [...s.subreddits, src.value] };
+        }
+        case "hacker_news":
+          return { ...s, hackerNews: true };
+        case "ticker": {
+          const existing = s.stockTickers
+            ? s.stockTickers.split(",").map((t) => t.trim().toUpperCase()).filter(Boolean)
+            : [];
+          if (existing.includes(src.value.toUpperCase())) return s;
+          return { ...s, stocks: true, stockTickers: [...existing, src.value.toUpperCase()].join(", ") };
+        }
+        case "rss":
+          if (s.feeds.includes(src.value)) return s;
+          return { ...s, rss: true, feeds: [...s.feeds, src.value] };
+        case "weather":
+          return { ...s, weather: true };
+      }
+    });
   }
 
   const hasAnyBlock =
@@ -176,6 +342,13 @@ export default function DashboardClient(props: Props) {
             </div>
           </div>
           <div className="flex items-center gap-4">
+            {/* Inspiration toggle */}
+            <button
+              onClick={() => setInspiredOpen(true)}
+              className="flex items-center gap-1.5 text-xs font-semibold text-waffle-brown/50 hover:text-waffle-brown border border-waffle-brown/15 hover:border-waffle-brown/40 px-3 py-1.5 rounded-full transition-colors"
+            >
+              <span>✨</span> Get Inspired
+            </button>
             {/* Pause toggle */}
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold text-waffle-brown/50">
@@ -444,7 +617,102 @@ export default function DashboardClient(props: Props) {
           </div>
         </div>
       </div>
+
+      {/* ── Inspiration drawer ── */}
+      {inspiredOpen && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/20 z-40"
+            onClick={() => setInspiredOpen(false)}
+          />
+          {/* Panel */}
+          <aside className="fixed top-0 right-0 h-full w-80 bg-white shadow-2xl z-50 flex flex-col">
+            {/* Panel header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-waffle-brown/10 flex-shrink-0">
+              <div>
+                <p className="font-extrabold text-waffle-brown text-base">✨ Inspiration</p>
+                <p className="text-xs text-waffle-brown/40 mt-0.5">Tap any source to add it to your stack</p>
+              </div>
+              <button
+                onClick={() => setInspiredOpen(false)}
+                className="text-waffle-brown/30 hover:text-waffle-brown transition-colors text-xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Scrollable content */}
+            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+              {INSPIRATION_PACKS.map((pack) => (
+                <InspirationPackSection
+                  key={pack.label}
+                  pack={pack}
+                  stack={stack}
+                  onAdd={addFromInspiration}
+                />
+              ))}
+            </div>
+          </aside>
+        </>
+      )}
     </main>
+  );
+}
+
+// ── Inspiration Pack Section ─────────────────────────────────────────────────
+
+function InspirationPackSection({
+  pack,
+  stack,
+  onAdd,
+}: {
+  pack: InspirationPack;
+  stack: StackState;
+  onAdd: (src: InspirationSource) => void;
+}) {
+  const [open, setOpen] = useState(true);
+
+  return (
+    <div className="rounded-xl border border-waffle-brown/10 overflow-hidden">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-waffle-pale hover:bg-waffle-golden/20 transition-colors text-left"
+      >
+        <span className="flex items-center gap-2 font-bold text-waffle-brown text-sm">
+          <span>{pack.emoji}</span>
+          <span>{pack.label}</span>
+        </span>
+        <span className="text-waffle-brown/30 text-xs">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <ul className="divide-y divide-waffle-brown/5">
+          {pack.sources.map((src, i) => {
+            const added = isInStack(src, stack);
+            return (
+              <li key={i} className="flex items-center gap-3 px-4 py-2.5">
+                <div className="flex items-center justify-center w-5 h-5 flex-shrink-0">
+                  {sourceIcon(src)}
+                </div>
+                <span className="flex-1 text-xs font-medium text-waffle-brown/70 truncate">
+                  {sourceLabel(src)}
+                </span>
+                <button
+                  onClick={() => !added && onAdd(src)}
+                  className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+                    added
+                      ? "bg-waffle-orange/15 text-waffle-orange cursor-default"
+                      : "bg-waffle-brown/8 hover:bg-waffle-orange hover:text-white text-waffle-brown/40"
+                  }`}
+                >
+                  {added ? "✓" : "+"}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
   );
 }
 

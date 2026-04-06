@@ -12,13 +12,11 @@ export default async function Navbar() {
           WaffleStack
         </Link>
 
-        {!user && (
-          <div className="hidden md:flex items-center gap-8 text-sm font-semibold text-waffle-brown/60">
-            <Link href="/how-it-works" className="hover:text-waffle-brown transition-colors">How it Works</Link>
-            <Link href="/interests" className="hover:text-waffle-brown transition-colors">Interests</Link>
-            <Link href="/pricing" className="hover:text-waffle-brown transition-colors">Pricing</Link>
-          </div>
-        )}
+        <div className="hidden md:flex items-center gap-8 text-sm font-semibold text-waffle-brown/60">
+          <Link href="/how-it-works" className="hover:text-waffle-brown transition-colors">How it Works</Link>
+          <Link href="/interests" className="hover:text-waffle-brown transition-colors">Interests</Link>
+          <Link href="/pricing" className="hover:text-waffle-brown transition-colors">Pricing</Link>
+        </div>
 
         <div className="flex items-center gap-3 text-sm font-semibold">
           {user ? (
