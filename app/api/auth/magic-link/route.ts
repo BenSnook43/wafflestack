@@ -19,7 +19,10 @@ export async function POST(req: NextRequest) {
 
   if (error) {
     console.error("Magic link error:", error);
-    return NextResponse.json({ error: "Failed to send magic link." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to send magic link.", detail: error.message },
+      { status: 500 }
+    );
   }
 
   return NextResponse.json({ ok: true });
