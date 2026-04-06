@@ -236,6 +236,7 @@ export default function DashboardClient(props: Props) {
   const [stack, setStack] = useState<StackState>(() => blocksToState(props.blocks));
   const [active, setActive] = useState(props.active);
   const [saveStatus, setSaveStatus] = useState<"idle" | "loading" | "saved" | "error">("idle");
+  const [subCheck, setSubCheck] = useState<"idle" | "checking" | "invalid">("idle");
   const [inspiredOpen, setInspiredOpen] = useState(false);
 
   function toggleSub(sub: string) {
@@ -247,10 +248,25 @@ export default function DashboardClient(props: Props) {
     }));
   }
 
-  function addCustomSub() {
+  async function addCustomSub() {
     const cleaned = stack.customSub.trim().toLowerCase().replace(/^r\//, "");
-    if (cleaned && !stack.subreddits.includes(cleaned)) {
+    if (!cleaned || stack.subreddits.includes(cleaned)) return;
+
+    setSubCheck("checking");
+    try {
+      const res = await fetch(`/api/validate-subreddit?name=${encodeURIComponent(cleaned)}`);
+      const data = await res.json();
+      if (data.exists) {
+        const name = data.canonical ?? cleaned;
+        setStack((s) => ({ ...s, subreddits: [...s.subreddits, name], customSub: "" }));
+        setSubCheck("idle");
+      } else {
+        setSubCheck("invalid");
+      }
+    } catch {
+      // Network error — allow adding anyway, server will validate on save
       setStack((s) => ({ ...s, subreddits: [...s.subreddits, cleaned], customSub: "" }));
+      setSubCheck("idle");
     }
   }
 
@@ -462,22 +478,34 @@ export default function DashboardClient(props: Props) {
                   />
                 ))}
             </div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={stack.customSub}
-                onChange={(e) => setStack((s) => ({ ...s, customSub: e.target.value }))}
-                onKeyDown={(e) => e.key === "Enter" && addCustomSub()}
-                placeholder="+ Add subreddit (e.g. r/cooking)"
-                className="flex-1 border border-waffle-brown/15 rounded-xl px-4 py-2.5 text-sm bg-white text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:ring-2 focus:ring-waffle-orange"
-              />
-              <button
-                type="button"
-                onClick={addCustomSub}
-                className="px-4 py-2.5 bg-waffle-pale rounded-xl text-waffle-brown font-semibold text-sm hover:bg-waffle-golden/30 transition-colors"
-              >
-                Add
-              </button>
+            <div className="space-y-1">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={stack.customSub}
+                  onChange={(e) => {
+                    setStack((s) => ({ ...s, customSub: e.target.value }));
+                    if (subCheck === "invalid") setSubCheck("idle");
+                  }}
+                  onKeyDown={(e) => e.key === "Enter" && addCustomSub()}
+                  placeholder="+ Add subreddit (e.g. r/cooking)"
+                  disabled={subCheck === "checking"}
+                  className="flex-1 border border-waffle-brown/15 rounded-xl px-4 py-2.5 text-sm bg-white text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:ring-2 focus:ring-waffle-orange disabled:opacity-50"
+                />
+                <button
+                  type="button"
+                  onClick={addCustomSub}
+                  disabled={subCheck === "checking"}
+                  className="px-4 py-2.5 bg-waffle-pale rounded-xl text-waffle-brown font-semibold text-sm hover:bg-waffle-golden/30 transition-colors disabled:opacity-50"
+                >
+                  {subCheck === "checking" ? "Checking…" : "Add"}
+                </button>
+              </div>
+              {subCheck === "invalid" && (
+                <p className="text-xs text-red-500 px-1">
+                  r/{stack.customSub.trim().toLowerCase().replace(/^r\//, "")} doesn&apos;t exist on Reddit
+                </p>
+              )}
             </div>
           </section>
 
