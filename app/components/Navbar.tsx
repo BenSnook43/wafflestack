@@ -14,8 +14,8 @@ export default async function Navbar() {
 
         {!user && (
           <div className="hidden md:flex items-center gap-8 text-sm font-semibold text-waffle-brown/60">
-            <a href="#how-it-works" className="hover:text-waffle-brown transition-colors">How it Works</a>
-            <a href="#interests" className="hover:text-waffle-brown transition-colors">Interests</a>
+            <Link href="/how-it-works" className="hover:text-waffle-brown transition-colors">How it Works</Link>
+            <Link href="/interests" className="hover:text-waffle-brown transition-colors">Interests</Link>
             <Link href="/pricing" className="hover:text-waffle-brown transition-colors">Pricing</Link>
           </div>
         )}
@@ -41,7 +41,7 @@ export default async function Navbar() {
                 Sign in
               </Link>
               <Link
-                href="#signup"
+                href="/onboard"
                 className="bg-waffle-orange hover:bg-waffle-orange/90 text-white font-semibold px-5 py-2.5 rounded-full transition-colors text-sm"
               >
                 Get Your Stack

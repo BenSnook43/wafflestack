@@ -48,12 +48,12 @@ export default function Home() {
             >
               Get Started
             </Link>
-            <a
-              href="#how-it-works"
+            <Link
+              href="/how-it-works"
               className="flex items-center gap-2 border-2 border-waffle-brown/20 hover:border-waffle-brown/50 text-waffle-brown font-semibold px-7 py-3.5 rounded-full transition-colors text-sm"
             >
               How It Works
-            </a>
+            </Link>
           </div>
         </div>
 
