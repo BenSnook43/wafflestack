@@ -3,9 +3,8 @@ import Stripe from "stripe";
 import { createAuthClient } from "@/lib/supabase-auth";
 import { supabase } from "@/lib/supabase";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-
 export async function GET() {
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
   const authClient = await createAuthClient();
   const { data: { user } } = await authClient.auth.getUser();
   if (!user?.email) {

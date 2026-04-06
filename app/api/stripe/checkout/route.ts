@@ -3,9 +3,12 @@ import Stripe from "stripe";
 import { createAuthClient } from "@/lib/supabase-auth";
 import { supabase } from "@/lib/supabase";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+function getStripe() {
+  return new Stripe(process.env.STRIPE_SECRET_KEY!);
+}
 
 export async function POST(req: NextRequest) {
+  const stripe = getStripe();
   // Require an authenticated session
   const authClient = await createAuthClient();
   const { data: { user } } = await authClient.auth.getUser();
