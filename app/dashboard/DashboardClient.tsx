@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -126,6 +126,28 @@ const INSPIRATION_PACKS: InspirationPack[] = [
   },
 ];
 
+// ── Brandfetch logo component ────────────────────────────────────────────────
+
+const BRANDFETCH_CLIENT_ID = process.env.NEXT_PUBLIC_BRANDFETCH_CLIENT_ID ?? "";
+
+function TickerLogo({ symbol, size = 24 }: { symbol: string; size?: number }) {
+  const [failed, setFailed] = useState(false);
+  if (failed || !BRANDFETCH_CLIENT_ID) {
+    return <span className="flex-shrink-0 text-sm">📈</span>;
+  }
+  return (
+    <img
+      src={`https://cdn.brandfetch.io/${symbol.toUpperCase()}/w/${size}/h/${size}?c=${BRANDFETCH_CLIENT_ID}`}
+      alt={symbol}
+      width={size}
+      height={size}
+      className="rounded flex-shrink-0 object-contain"
+      style={{ width: size, height: size }}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 function sourceIcon(src: InspirationSource) {
   if (src.type === "hacker_news") {
     return (
@@ -137,7 +159,7 @@ function sourceIcon(src: InspirationSource) {
   if (src.type === "subreddit") {
     return <span className="font-black text-orange-500 text-base leading-none flex-shrink-0">↑</span>;
   }
-  if (src.type === "ticker") return <span className="flex-shrink-0">📈</span>;
+  if (src.type === "ticker") return <TickerLogo symbol={src.value} size={20} />;
   if (src.type === "rss") return <span className="flex-shrink-0">📡</span>;
   if (src.type === "weather") return <span className="flex-shrink-0">⛅</span>;
 }
@@ -239,6 +261,12 @@ export default function DashboardClient(props: Props) {
   const [saveStatus, setSaveStatus] = useState<"idle" | "loading" | "saved" | "error">("idle");
   const [subCheck, setSubCheck] = useState<"idle" | "checking" | "invalid">("idle");
   const [inspiredOpen, setInspiredOpen] = useState(false);
+  const [tickerQuery, setTickerQuery] = useState("");
+  const [tickerResults, setTickerResults] = useState<{ symbol: string; description: string }[]>([]);
+  const [tickerSearching, setTickerSearching] = useState(false);
+  const [tickerDropdownOpen, setTickerDropdownOpen] = useState(false);
+  const tickerDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tickerInputRef = useRef<HTMLInputElement>(null);
 
   function toggleSub(sub: string) {
     setStack((s) => ({
@@ -270,6 +298,60 @@ export default function DashboardClient(props: Props) {
       setSubCheck("idle");
     }
   }
+
+  function searchTicker(q: string) {
+    setTickerQuery(q);
+    if (tickerDebounce.current) clearTimeout(tickerDebounce.current);
+    if (!q.trim()) {
+      setTickerResults([]);
+      setTickerDropdownOpen(false);
+      return;
+    }
+    tickerDebounce.current = setTimeout(async () => {
+      setTickerSearching(true);
+      try {
+        const res = await fetch(`/api/search-ticker?q=${encodeURIComponent(q.trim())}`);
+        const data = await res.json();
+        const currentTickers = stack.stockTickers
+          .split(",").map((t) => t.trim().toUpperCase()).filter(Boolean);
+        const filtered = (data.results ?? []).filter(
+          (r: { symbol: string }) => !currentTickers.includes(r.symbol.toUpperCase())
+        );
+        setTickerResults(filtered);
+        setTickerDropdownOpen(filtered.length > 0);
+      } finally {
+        setTickerSearching(false);
+      }
+    }, 300);
+  }
+
+  function addTicker(symbol: string) {
+    const upper = symbol.toUpperCase();
+    const existing = stack.stockTickers
+      .split(",").map((t) => t.trim().toUpperCase()).filter(Boolean);
+    if (existing.includes(upper)) return;
+    setStack((s) => ({
+      ...s,
+      stocks: true,
+      stockTickers: [...existing, upper].join(", "),
+    }));
+    setTickerQuery("");
+    setTickerResults([]);
+    setTickerDropdownOpen(false);
+    tickerInputRef.current?.focus();
+  }
+
+  function removeTicker(symbol: string) {
+    const upper = symbol.toUpperCase();
+    setStack((s) => {
+      const remaining = s.stockTickers
+        .split(",").map((t) => t.trim().toUpperCase()).filter((t) => t && t !== upper);
+      return { ...s, stockTickers: remaining.join(", "), stocks: remaining.length > 0 };
+    });
+  }
+
+  // Clean up debounce on unmount
+  useEffect(() => () => { if (tickerDebounce.current) clearTimeout(tickerDebounce.current); }, []);
 
   function addFeed() {
     const url = stack.customFeed.trim();
@@ -433,19 +515,77 @@ export default function DashboardClient(props: Props) {
 
               <NodeCard
                 active={stack.stocks}
-                onClick={() => setStack((s) => ({ ...s, stocks: !s.stocks }))}
+                onClick={() => {
+                  const next = !stack.stocks;
+                  setStack((s) => ({ ...s, stocks: next }));
+                  if (next) setTimeout(() => tickerInputRef.current?.focus(), 50);
+                }}
                 icon="📈"
                 label="Stock Ticker"
               >
                 {stack.stocks && (
-                  <input
-                    type="text"
-                    value={stack.stockTickers}
-                    onChange={(e) => setStack((s) => ({ ...s, stockTickers: e.target.value }))}
-                    onClick={(e) => e.stopPropagation()}
-                    placeholder="AAPL, TSLA…"
-                    className="mt-2 w-full border-b border-waffle-brown/20 bg-transparent text-sm text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:border-waffle-orange py-1"
-                  />
+                  <div className="mt-2 space-y-2" onClick={(e) => e.stopPropagation()}>
+                    {/* Ticker chips */}
+                    {stack.stockTickers.split(",").map((t) => t.trim().toUpperCase()).filter(Boolean).length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {stack.stockTickers.split(",").map((t) => t.trim().toUpperCase()).filter(Boolean).map((ticker) => (
+                          <span
+                            key={ticker}
+                            className="flex items-center gap-1 bg-waffle-pale rounded-lg px-2 py-0.5 text-xs font-semibold text-waffle-brown"
+                          >
+                            <TickerLogo symbol={ticker} size={16} />
+                            {ticker}
+                            <button
+                              type="button"
+                              onClick={() => removeTicker(ticker)}
+                              className="ml-0.5 text-waffle-brown/40 hover:text-waffle-brown leading-none"
+                              aria-label={`Remove ${ticker}`}
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {/* Search input */}
+                    <div className="relative">
+                      <input
+                        ref={tickerInputRef}
+                        type="text"
+                        value={tickerQuery}
+                        onChange={(e) => searchTicker(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && tickerResults.length > 0) {
+                            addTicker(tickerResults[0].symbol);
+                          }
+                          if (e.key === "Escape") {
+                            setTickerDropdownOpen(false);
+                          }
+                        }}
+                        onFocus={() => tickerResults.length > 0 && setTickerDropdownOpen(true)}
+                        onBlur={() => setTimeout(() => setTickerDropdownOpen(false), 150)}
+                        placeholder={tickerSearching ? "Searching…" : "Search ticker or company…"}
+                        className="w-full border-b border-waffle-brown/20 bg-transparent text-sm text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:border-waffle-orange py-1"
+                      />
+                      {tickerDropdownOpen && (
+                        <ul className="absolute left-0 right-0 top-full z-50 bg-white border border-waffle-brown/15 rounded-xl shadow-lg overflow-hidden mt-1">
+                          {tickerResults.map((r) => (
+                            <li key={r.symbol}>
+                              <button
+                                type="button"
+                                onMouseDown={() => addTicker(r.symbol)}
+                                className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-waffle-pale text-left transition-colors"
+                              >
+                                <TickerLogo symbol={r.symbol} size={20} />
+                                <span className="font-semibold text-sm text-waffle-brown">{r.symbol}</span>
+                                <span className="text-xs text-waffle-brown/50 truncate">{r.description}</span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
                 )}
               </NodeCard>
             </div>
