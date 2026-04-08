@@ -277,6 +277,8 @@ export default function DashboardClient(props: Props) {
   const [tickerDropdownOpen, setTickerDropdownOpen] = useState(false);
   const tickerDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tickerInputRef = useRef<HTMLInputElement>(null);
+  const dragKey = useRef<string | null>(null);
+  const [dragOverKey, setDragOverKey] = useState<string | null>(null);
 
   function toggleSub(sub: string) {
     setStack((s) => ({
@@ -360,16 +362,34 @@ export default function DashboardClient(props: Props) {
     });
   }
 
-  function moveSection(key: string, dir: "up" | "down") {
+  function handleDragStart(key: string) {
+    dragKey.current = key;
+  }
+
+  function handleDragOver(e: React.DragEvent, key: string) {
+    e.preventDefault();
+    if (dragKey.current && dragKey.current !== key) setDragOverKey(key);
+  }
+
+  function handleDrop(key: string) {
+    const from = dragKey.current;
+    if (!from || from === key) { setDragOverKey(null); return; }
     setStack((s) => {
       const order = [...s.sectionOrder];
-      const idx = order.indexOf(key);
-      if (idx < 0) return s;
-      const target = dir === "up" ? idx - 1 : idx + 1;
-      if (target < 0 || target >= order.length) return s;
-      [order[idx], order[target]] = [order[target], order[idx]];
+      const fromIdx = order.indexOf(from);
+      const toIdx = order.indexOf(key);
+      if (fromIdx < 0 || toIdx < 0) return s;
+      order.splice(fromIdx, 1);
+      order.splice(toIdx, 0, from);
       return { ...s, sectionOrder: order };
     });
+    dragKey.current = null;
+    setDragOverKey(null);
+  }
+
+  function handleDragEnd() {
+    dragKey.current = null;
+    setDragOverKey(null);
   }
 
   function removeSection(key: string) {
@@ -758,10 +778,7 @@ export default function DashboardClient(props: Props) {
               </div>
             ) : (
               <ul className="space-y-2">
-                {activeSectionOrder.map((key, idx) => {
-                  const isFirst = idx === 0;
-                  const isLast = idx === activeSectionOrder.length - 1;
-
+                {activeSectionOrder.map((key) => {
                   const sectionMeta: Record<string, { icon: string; label: string }> = {
                     weather: { icon: "⛅", label: `Weather${stack.weatherCity ? ` — ${stack.weatherCity}` : ""}` },
                     stocks: { icon: "📈", label: "Stocks" },
@@ -794,23 +811,26 @@ export default function DashboardClient(props: Props) {
                   }
 
                   return (
-                    <li key={key} className="bg-waffle-pale rounded-xl overflow-hidden">
+                    <li
+                      key={key}
+                      draggable
+                      onDragStart={() => handleDragStart(key)}
+                      onDragOver={(e) => handleDragOver(e, key)}
+                      onDrop={() => handleDrop(key)}
+                      onDragEnd={handleDragEnd}
+                      className={`bg-waffle-pale rounded-xl overflow-hidden transition-all ${
+                        dragOverKey === key ? "ring-2 ring-waffle-orange ring-offset-1" : ""
+                      }`}
+                    >
                       <div className="flex items-center gap-2 px-3 py-2.5">
-                        {/* Reorder arrows */}
-                        <div className="flex flex-col flex-shrink-0 -space-y-0.5">
-                          <button
-                            onClick={() => moveSection(key, "up")}
-                            disabled={isFirst}
-                            className="text-waffle-brown/30 hover:text-waffle-brown disabled:opacity-20 text-[10px] leading-tight transition-colors"
-                            aria-label="Move up"
-                          >▲</button>
-                          <button
-                            onClick={() => moveSection(key, "down")}
-                            disabled={isLast}
-                            className="text-waffle-brown/30 hover:text-waffle-brown disabled:opacity-20 text-[10px] leading-tight transition-colors"
-                            aria-label="Move down"
-                          >▼</button>
-                        </div>
+                        {/* Drag handle */}
+                        <span className="cursor-grab active:cursor-grabbing text-waffle-brown/25 hover:text-waffle-brown/50 flex-shrink-0 transition-colors" aria-hidden>
+                          <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor">
+                            <rect y="1.5" width="10" height="1.5" rx="0.75"/>
+                            <rect y="6" width="10" height="1.5" rx="0.75"/>
+                            <rect y="10.5" width="10" height="1.5" rx="0.75"/>
+                          </svg>
+                        </span>
                         <span className="text-base leading-none flex-shrink-0">{meta.icon}</span>
                         <span className="flex-1 text-sm font-semibold text-waffle-brown truncate">{meta.label}</span>
                         <button
