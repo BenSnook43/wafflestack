@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAuthClient } from "@/lib/supabase-auth";
 import { supabase } from "@/lib/supabase";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 
 export async function POST() {
   const authClient = await createAuthClient();
@@ -23,6 +23,8 @@ export async function POST() {
   if (userRecord.subscription_status === "active") {
     return NextResponse.json({ error: "Already subscribed" }, { status: 400 });
   }
+
+  const stripe = getStripe();
 
   // Create Stripe customer if not yet created
   let customerId = userRecord.stripe_customer_id;
