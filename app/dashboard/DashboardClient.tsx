@@ -275,10 +275,12 @@ export default function DashboardClient(props: Props) {
   const [tickerResults, setTickerResults] = useState<{ symbol: string; description: string }[]>([]);
   const [tickerSearching, setTickerSearching] = useState(false);
   const [tickerDropdownOpen, setTickerDropdownOpen] = useState(false);
+  const [tickerError, setTickerError] = useState(false);
   const tickerDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tickerInputRef = useRef<HTMLInputElement>(null);
   const dragKey = useRef<string | null>(null);
-  const [dragOverKey, setDragOverKey] = useState<string | null>(null);
+  const dragPosition = useRef<"before" | "after" | null>(null);
+  const [dragOver, setDragOver] = useState<{ key: string; position: "before" | "after" } | null>(null);
 
   function toggleSub(sub: string) {
     setStack((s) => ({
@@ -317,13 +319,21 @@ export default function DashboardClient(props: Props) {
     if (!q.trim()) {
       setTickerResults([]);
       setTickerDropdownOpen(false);
+      setTickerError(false);
       return;
     }
     tickerDebounce.current = setTimeout(async () => {
       setTickerSearching(true);
+      setTickerError(false);
       try {
         const res = await fetch(`/api/search-ticker?q=${encodeURIComponent(q.trim())}`);
         const data = await res.json();
+        if (!res.ok) {
+          setTickerResults([]);
+          setTickerError(true);
+          setTickerDropdownOpen(true);
+          return;
+        }
         const currentTickers = stack.stockTickers
           .split(",").map((t) => t.trim().toUpperCase()).filter(Boolean);
         const filtered = (data.results ?? []).filter(
@@ -331,6 +341,10 @@ export default function DashboardClient(props: Props) {
         );
         setTickerResults(filtered);
         setTickerDropdownOpen(filtered.length > 0);
+      } catch {
+        setTickerResults([]);
+        setTickerError(true);
+        setTickerDropdownOpen(true);
       } finally {
         setTickerSearching(false);
       }
@@ -368,28 +382,36 @@ export default function DashboardClient(props: Props) {
 
   function handleDragOver(e: React.DragEvent, key: string) {
     e.preventDefault();
-    if (dragKey.current && dragKey.current !== key) setDragOverKey(key);
+    if (!dragKey.current || dragKey.current === key) return;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const position = e.clientY < rect.top + rect.height / 2 ? "before" : "after";
+    dragPosition.current = position;
+    setDragOver({ key, position });
   }
 
   function handleDrop(key: string) {
     const from = dragKey.current;
-    if (!from || from === key) { setDragOverKey(null); return; }
+    const position = dragPosition.current;
+    setDragOver(null);
+    dragKey.current = null;
+    dragPosition.current = null;
+    if (!from || from === key || !position) return;
     setStack((s) => {
       const order = [...s.sectionOrder];
       const fromIdx = order.indexOf(from);
-      const toIdx = order.indexOf(key);
-      if (fromIdx < 0 || toIdx < 0) return s;
+      if (fromIdx < 0) return s;
       order.splice(fromIdx, 1);
-      order.splice(toIdx, 0, from);
+      const toIdx = order.indexOf(key);
+      if (toIdx < 0) return s;
+      order.splice(position === "before" ? toIdx : toIdx + 1, 0, from);
       return { ...s, sectionOrder: order };
     });
-    dragKey.current = null;
-    setDragOverKey(null);
   }
 
   function handleDragEnd() {
     dragKey.current = null;
-    setDragOverKey(null);
+    dragPosition.current = null;
+    setDragOver(null);
   }
 
   function removeSection(key: string) {
@@ -810,6 +832,9 @@ export default function DashboardClient(props: Props) {
                     });
                   }
 
+                  const isDropBefore = dragOver?.key === key && dragOver.position === "before";
+                  const isDropAfter = dragOver?.key === key && dragOver.position === "after";
+
                   return (
                     <li
                       key={key}
@@ -818,8 +843,12 @@ export default function DashboardClient(props: Props) {
                       onDragOver={(e) => handleDragOver(e, key)}
                       onDrop={() => handleDrop(key)}
                       onDragEnd={handleDragEnd}
-                      className={`bg-waffle-pale rounded-xl overflow-hidden transition-all ${
-                        dragOverKey === key ? "ring-2 ring-waffle-orange ring-offset-1" : ""
+                      className={`bg-waffle-pale rounded-xl overflow-hidden border-y-2 transition-colors ${
+                        isDropBefore
+                          ? "border-t-waffle-orange border-b-transparent"
+                          : isDropAfter
+                          ? "border-b-waffle-orange border-t-transparent"
+                          : "border-y-transparent"
                       }`}
                     >
                       <div className="flex items-center gap-2 px-3 py-2.5">
