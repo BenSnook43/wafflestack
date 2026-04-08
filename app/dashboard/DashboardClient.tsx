@@ -191,12 +191,19 @@ function uid() {
 
 // ── Derive flat state from blocks array ─────────────────────────────────────
 
+const DEFAULT_SECTION_ORDER = ["weather", "stocks", "reddit", "hacker_news", "rss"];
+
 function blocksToState(blocks: Block[]) {
   const weather = blocks.find((b) => b.type === "weather");
   const stocks = blocks.find((b) => b.type === "stocks");
   const reddit = blocks.find((b) => b.type === "reddit");
   const rss = blocks.find((b) => b.type === "rss");
   const hackerNews = blocks.some((b) => b.type === "hacker_news");
+
+  // Derive order from blocks (which already respect DB section_order), then append missing
+  const fromBlocks = blocks.map((b) => b.type).filter((t) => DEFAULT_SECTION_ORDER.includes(t as string));
+  const missing = DEFAULT_SECTION_ORDER.filter((t) => !fromBlocks.includes(t as BlockType));
+  const sectionOrder = [...fromBlocks, ...missing];
 
   return {
     weather: !!weather,
@@ -209,18 +216,21 @@ function blocksToState(blocks: Block[]) {
     rss: !!rss,
     feeds: rss?.config.feeds ?? [],
     customFeed: "",
+    sectionOrder,
   };
 }
 
 type StackState = ReturnType<typeof blocksToState>;
 
 function stateToSavePayload(state: StackState) {
-  const sectionOrder: string[] = [];
-  if (state.weather) sectionOrder.push("weather");
-  if (state.stocks) sectionOrder.push("stocks");
-  if (state.subreddits.length > 0) sectionOrder.push("reddit");
-  if (state.hackerNews) sectionOrder.push("hacker_news");
-  if (state.feeds.length > 0) sectionOrder.push("rss");
+  const sectionOrder = state.sectionOrder.filter((key) => {
+    if (key === "weather") return state.weather;
+    if (key === "stocks") return state.stocks;
+    if (key === "reddit") return state.subreddits.length > 0;
+    if (key === "hacker_news") return state.hackerNews;
+    if (key === "rss") return state.feeds.length > 0;
+    return false;
+  });
 
   return {
     location: state.weather ? state.weatherCity || null : null,
@@ -350,6 +360,31 @@ export default function DashboardClient(props: Props) {
     });
   }
 
+  function moveSection(key: string, dir: "up" | "down") {
+    setStack((s) => {
+      const order = [...s.sectionOrder];
+      const idx = order.indexOf(key);
+      if (idx < 0) return s;
+      const target = dir === "up" ? idx - 1 : idx + 1;
+      if (target < 0 || target >= order.length) return s;
+      [order[idx], order[target]] = [order[target], order[idx]];
+      return { ...s, sectionOrder: order };
+    });
+  }
+
+  function removeSection(key: string) {
+    setStack((s) => {
+      switch (key) {
+        case "weather": return { ...s, weather: false, weatherCity: "" };
+        case "stocks": return { ...s, stocks: false, stockTickers: "" };
+        case "reddit": return { ...s, subreddits: [] };
+        case "hacker_news": return { ...s, hackerNews: false };
+        case "rss": return { ...s, rss: false, feeds: [] };
+        default: return s;
+      }
+    });
+  }
+
   // Clean up debounce on unmount
   useEffect(() => () => { if (tickerDebounce.current) clearTimeout(tickerDebounce.current); }, []);
 
@@ -388,13 +423,15 @@ export default function DashboardClient(props: Props) {
   const hasAnyBlock =
     stack.weather || stack.stocks || stack.subreddits.length > 0 || stack.hackerNews || stack.feeds.length > 0;
 
-  const stackItems = [
-    ...(stack.weather ? [`⛅ Weather — ${stack.weatherCity || "city TBD"}`] : []),
-    ...(stack.stocks ? [`📈 Stocks — ${stack.stockTickers || "tickers TBD"}`] : []),
-    ...stack.subreddits.map((s) => `↑ r/${s}`),
-    ...(stack.hackerNews ? ["🟠 Hacker News"] : []),
-    ...stack.feeds.map((f) => `📡 ${f}`),
-  ];
+  // Active sections in user-defined order
+  const activeSectionOrder = stack.sectionOrder.filter((key) => {
+    if (key === "weather") return stack.weather;
+    if (key === "stocks") return stack.stocks;
+    if (key === "reddit") return stack.subreddits.length > 0;
+    if (key === "hacker_news") return stack.hackerNews;
+    if (key === "rss") return stack.rss && stack.feeds.length > 0;
+    return false;
+  });
 
   async function handleSave() {
     setSaveStatus("loading");
@@ -715,20 +752,90 @@ export default function DashboardClient(props: Props) {
             <h3 className="font-extrabold text-waffle-brown text-lg flex items-center gap-2">
               Your Stack <span>🥞</span>
             </h3>
-            {stackItems.length === 0 ? (
+            {activeSectionOrder.length === 0 ? (
               <div className="border-2 border-dashed border-waffle-brown/10 rounded-xl px-4 py-8 text-center text-waffle-brown/25 text-sm">
                 Pick some nodes to build your digest…
               </div>
             ) : (
               <ul className="space-y-2">
-                {stackItems.map((item) => (
-                  <li
-                    key={item}
-                    className="flex items-center gap-3 bg-waffle-pale rounded-xl px-4 py-3 text-sm font-semibold text-waffle-brown"
-                  >
-                    {item}
-                  </li>
-                ))}
+                {activeSectionOrder.map((key, idx) => {
+                  const isFirst = idx === 0;
+                  const isLast = idx === activeSectionOrder.length - 1;
+
+                  const sectionMeta: Record<string, { icon: string; label: string }> = {
+                    weather: { icon: "⛅", label: `Weather${stack.weatherCity ? ` — ${stack.weatherCity}` : ""}` },
+                    stocks: { icon: "📈", label: "Stocks" },
+                    reddit: { icon: "↑", label: "Reddit" },
+                    hacker_news: { icon: "🟠", label: "Hacker News" },
+                    rss: { icon: "📡", label: "RSS Feeds" },
+                  };
+                  const meta = sectionMeta[key];
+
+                  const subItems: { key: string; label: string; onRemove: () => void }[] = [];
+                  if (key === "stocks") {
+                    stack.stockTickers.split(",").map((t) => t.trim().toUpperCase()).filter(Boolean).forEach((ticker) => {
+                      subItems.push({ key: ticker, label: ticker, onRemove: () => removeTicker(ticker) });
+                    });
+                  }
+                  if (key === "reddit") {
+                    stack.subreddits.forEach((sub) => {
+                      subItems.push({ key: sub, label: `r/${sub}`, onRemove: () => toggleSub(sub) });
+                    });
+                  }
+                  if (key === "rss") {
+                    stack.feeds.forEach((feed) => {
+                      const short = feed.replace(/^https?:\/\/(www\.)?/, "").split("/")[0];
+                      subItems.push({
+                        key: feed,
+                        label: short,
+                        onRemove: () => setStack((s) => ({ ...s, feeds: s.feeds.filter((f) => f !== feed) })),
+                      });
+                    });
+                  }
+
+                  return (
+                    <li key={key} className="bg-waffle-pale rounded-xl overflow-hidden">
+                      <div className="flex items-center gap-2 px-3 py-2.5">
+                        {/* Reorder arrows */}
+                        <div className="flex flex-col flex-shrink-0 -space-y-0.5">
+                          <button
+                            onClick={() => moveSection(key, "up")}
+                            disabled={isFirst}
+                            className="text-waffle-brown/30 hover:text-waffle-brown disabled:opacity-20 text-[10px] leading-tight transition-colors"
+                            aria-label="Move up"
+                          >▲</button>
+                          <button
+                            onClick={() => moveSection(key, "down")}
+                            disabled={isLast}
+                            className="text-waffle-brown/30 hover:text-waffle-brown disabled:opacity-20 text-[10px] leading-tight transition-colors"
+                            aria-label="Move down"
+                          >▼</button>
+                        </div>
+                        <span className="text-base leading-none flex-shrink-0">{meta.icon}</span>
+                        <span className="flex-1 text-sm font-semibold text-waffle-brown truncate">{meta.label}</span>
+                        <button
+                          onClick={() => removeSection(key)}
+                          className="text-waffle-brown/25 hover:text-red-400 transition-colors flex-shrink-0 text-lg leading-none ml-1"
+                          aria-label={`Remove ${meta.label}`}
+                        >×</button>
+                      </div>
+                      {subItems.length > 0 && (
+                        <div className="border-t border-waffle-brown/8 px-3 pb-2 pt-1.5 space-y-1">
+                          {subItems.map((item) => (
+                            <div key={item.key} className="flex items-center justify-between gap-1">
+                              <span className="text-xs text-waffle-brown/55 truncate">{item.label}</span>
+                              <button
+                                onClick={item.onRemove}
+                                className="text-waffle-brown/25 hover:text-red-400 transition-colors text-sm leading-none flex-shrink-0"
+                                aria-label={`Remove ${item.label}`}
+                              >×</button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
 
