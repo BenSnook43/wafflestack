@@ -59,6 +59,12 @@ export default async function DashboardPage() {
     .eq("email", user.email!)
     .single();
 
+  // Trial expired and not a paying subscriber → paywall
+  const trialExpired =
+    userRecord?.trial_ends_at && new Date(userRecord.trial_ends_at) < new Date();
+  const isSubscribed = userRecord?.subscription_status === "active";
+  if (trialExpired && !isSubscribed) redirect("/subscribe");
+
   const { data: prefs } = await supabase
     .from("preferences")
     .select("location, subreddits, stocks, rss_feeds, hacker_news, section_order")

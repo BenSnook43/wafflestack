@@ -51,6 +51,8 @@ const INSPIRATION_PACKS: InspirationPack[] = [
       { type: "subreddit", value: "programming", label: "r/programming" },
       { type: "subreddit", value: "MachineLearning", label: "r/MachineLearning" },
       { type: "hacker_news" },
+      { type: "rss", value: "https://feeds.arstechnica.com/arstechnica/index", label: "Ars Technica" },
+      { type: "rss", value: "https://www.theverge.com/rss/index.xml", label: "The Verge" },
     ],
   },
   {
@@ -62,6 +64,8 @@ const INSPIRATION_PACKS: InspirationPack[] = [
       { type: "ticker", value: "SPY", label: "SPY — S&P 500 ETF" },
       { type: "subreddit", value: "investing", label: "r/investing" },
       { type: "subreddit", value: "stocks", label: "r/stocks" },
+      { type: "rss", value: "https://feeds.marketwatch.com/marketwatch/topstories/", label: "MarketWatch" },
+      { type: "rss", value: "https://www.investopedia.com/feedbuilder/feed/getfeed/?feedName=rss_headline", label: "Investopedia" },
     ],
   },
   {
@@ -72,6 +76,8 @@ const INSPIRATION_PACKS: InspirationPack[] = [
       { type: "subreddit", value: "geopolitics", label: "r/geopolitics" },
       { type: "rss", value: "https://feeds.bbci.co.uk/news/rss.xml", label: "BBC News" },
       { type: "rss", value: "https://feeds.reuters.com/reuters/topNews", label: "Reuters" },
+      { type: "rss", value: "https://www.theguardian.com/world/rss", label: "The Guardian" },
+      { type: "rss", value: "https://www.aljazeera.com/xml/rss/all.xml", label: "Al Jazeera" },
     ],
   },
   {
@@ -82,6 +88,8 @@ const INSPIRATION_PACKS: InspirationPack[] = [
       { type: "subreddit", value: "UXDesign", label: "r/UXDesign" },
       { type: "subreddit", value: "graphic_design", label: "r/graphic_design" },
       { type: "rss", value: "https://www.smashingmagazine.com/feed/", label: "Smashing Magazine" },
+      { type: "rss", value: "https://alistapart.com/main/feed/", label: "A List Apart" },
+      { type: "rss", value: "https://css-tricks.com/feed/", label: "CSS-Tricks" },
     ],
   },
   {
@@ -92,6 +100,8 @@ const INSPIRATION_PACKS: InspirationPack[] = [
       { type: "subreddit", value: "space", label: "r/space" },
       { type: "subreddit", value: "biology", label: "r/biology" },
       { type: "rss", value: "https://www.newscientist.com/feed/home/", label: "New Scientist" },
+      { type: "rss", value: "https://www.sciencedaily.com/rss/all.xml", label: "ScienceDaily" },
+      { type: "rss", value: "https://phys.org/rss-feed/", label: "Phys.org" },
     ],
   },
   {
@@ -102,6 +112,8 @@ const INSPIRATION_PACKS: InspirationPack[] = [
       { type: "subreddit", value: "Bitcoin", label: "r/Bitcoin" },
       { type: "ticker", value: "BTC-USD", label: "BTC — Bitcoin" },
       { type: "ticker", value: "ETH-USD", label: "ETH — Ethereum" },
+      { type: "rss", value: "https://www.coindesk.com/arc/outboundfeeds/rss/", label: "CoinDesk" },
+      { type: "rss", value: "https://cointelegraph.com/rss", label: "Cointelegraph" },
     ],
   },
   {
@@ -112,6 +124,8 @@ const INSPIRATION_PACKS: InspirationPack[] = [
       { type: "subreddit", value: "nutrition", label: "r/nutrition" },
       { type: "subreddit", value: "running", label: "r/running" },
       { type: "rss", value: "https://examine.com/feed/", label: "Examine.com" },
+      { type: "rss", value: "https://www.healthline.com/rss/news", label: "Healthline" },
+      { type: "rss", value: "https://www.nhs.uk/news/feed/", label: "NHS News" },
     ],
   },
   {
@@ -122,6 +136,8 @@ const INSPIRATION_PACKS: InspirationPack[] = [
       { type: "subreddit", value: "gamedev", label: "r/gamedev" },
       { type: "subreddit", value: "pcgaming", label: "r/pcgaming" },
       { type: "rss", value: "https://www.rockpapershotgun.com/feed/", label: "Rock Paper Shotgun" },
+      { type: "rss", value: "https://www.eurogamer.net/feed", label: "Eurogamer" },
+      { type: "rss", value: "https://www.pcgamer.com/rss/", label: "PC Gamer" },
     ],
   },
 ];
@@ -150,14 +166,10 @@ function TickerLogo({ symbol, size = 24 }: { symbol: string; size?: number }) {
 
 function sourceIcon(src: InspirationSource) {
   if (src.type === "hacker_news") {
-    return (
-      <span className="font-extrabold bg-orange-600 text-white w-5 h-5 flex items-center justify-center rounded text-[10px] flex-shrink-0">
-        Y
-      </span>
-    );
+    return <img src="/icons/hacker-news.png" width={20} height={20} alt="Hacker News" className="rounded flex-shrink-0" />;
   }
   if (src.type === "subreddit") {
-    return <span className="font-black text-orange-500 text-base leading-none flex-shrink-0">↑</span>;
+    return <img src="/icons/reddit.png" width={20} height={20} alt="Reddit" className="rounded-full flex-shrink-0" />;
   }
   if (src.type === "ticker") return <TickerLogo symbol={src.value} size={20} />;
   if (src.type === "rss") return <span className="flex-shrink-0">📡</span>;
@@ -507,8 +519,30 @@ export default function DashboardClient(props: Props) {
 
   const badge = subscriptionBadge(props.subscriptionStatus, props.trialEndsAt);
 
+  const daysLeft = props.trialEndsAt
+    ? Math.max(0, Math.ceil((new Date(props.trialEndsAt).getTime() - Date.now()) / 86_400_000))
+    : null;
+  const showTrialBanner =
+    props.subscriptionStatus === "trialing" && daysLeft !== null && daysLeft <= 5;
+
   return (
     <main className="min-h-screen bg-waffle-cream">
+      {/* ── Trial expiry banner ── */}
+      {showTrialBanner && (
+        <div className="bg-waffle-orange text-white text-sm font-semibold text-center py-2 px-4 flex items-center justify-center gap-4">
+          <span>
+            {daysLeft === 0
+              ? "Your free trial ends today."
+              : `${daysLeft} day${daysLeft !== 1 ? "s" : ""} left in your free trial.`}
+          </span>
+          <a
+            href="/subscribe"
+            className="underline underline-offset-2 hover:no-underline"
+          >
+            Subscribe for $5/mo →
+          </a>
+        </div>
+      )}
       {/* ── Header ── */}
       <div className="bg-waffle-cream border-b border-waffle-brown/8">
         <div className="max-w-4xl mx-auto px-6 py-6 flex items-center justify-between">
@@ -673,7 +707,7 @@ export default function DashboardClient(props: Props) {
           {/* Reddit Nodes */}
           <section className="space-y-3">
             <h3 className="text-xs font-bold text-waffle-brown/40 uppercase tracking-widest flex items-center gap-2">
-              <span className="font-black text-orange-500">↑</span> Reddit Nodes
+              <img src="/icons/reddit.png" width={14} height={14} alt="Reddit" className="rounded-full" /> Reddit Nodes
             </h3>
             <div className="grid grid-cols-2 gap-3">
               {PRESET_SUBS.map((sub) => (
@@ -681,8 +715,9 @@ export default function DashboardClient(props: Props) {
                   key={sub}
                   active={stack.subreddits.includes(sub)}
                   onClick={() => toggleSub(sub)}
-                  icon={<span className="font-black text-orange-500 text-xl">↑</span>}
+                  icon={<img src="/icons/reddit.png" width={18} height={18} alt="Reddit" className="rounded-full" />}
                   label={`r/${sub}`}
+                  compact
                 />
               ))}
               {/* Show custom subs that aren't in presets */}
@@ -693,8 +728,9 @@ export default function DashboardClient(props: Props) {
                     key={sub}
                     active={true}
                     onClick={() => toggleSub(sub)}
-                    icon={<span className="font-black text-orange-500 text-xl">↑</span>}
+                    icon={<img src="/icons/reddit.png" width={18} height={18} alt="Reddit" className="rounded-full" />}
                     label={`r/${sub}`}
+                    compact
                   />
                 ))}
             </div>
@@ -738,11 +774,7 @@ export default function DashboardClient(props: Props) {
               <NodeCard
                 active={stack.hackerNews}
                 onClick={() => setStack((s) => ({ ...s, hackerNews: !s.hackerNews }))}
-                icon={
-                  <span className="font-extrabold bg-orange-600 text-white w-7 h-7 flex items-center justify-center rounded text-xs">
-                    Y
-                  </span>
-                }
+                icon={<img src="/icons/hacker-news.png" width={28} height={28} alt="Hacker News" className="rounded" />}
                 label="Hacker News"
               />
               <NodeCard
@@ -801,11 +833,11 @@ export default function DashboardClient(props: Props) {
             ) : (
               <ul className="space-y-2">
                 {activeSectionOrder.map((key) => {
-                  const sectionMeta: Record<string, { icon: string; label: string }> = {
+                  const sectionMeta: Record<string, { icon: React.ReactNode; label: string }> = {
                     weather: { icon: "⛅", label: `Weather${stack.weatherCity ? ` — ${stack.weatherCity}` : ""}` },
                     stocks: { icon: "📈", label: "Stocks" },
-                    reddit: { icon: "↑", label: "Reddit" },
-                    hacker_news: { icon: "🟠", label: "Hacker News" },
+                    reddit: { icon: <img src="/icons/reddit.png" width={16} height={16} alt="Reddit" className="rounded-full" />, label: "Reddit" },
+                    hacker_news: { icon: <img src="/icons/hacker-news.png" width={16} height={16} alt="Hacker News" className="rounded" />, label: "Hacker News" },
                     rss: { icon: "📡", label: "RSS Feeds" },
                   };
                   const meta = sectionMeta[key];
@@ -860,7 +892,7 @@ export default function DashboardClient(props: Props) {
                             <rect y="10.5" width="10" height="1.5" rx="0.75"/>
                           </svg>
                         </span>
-                        <span className="text-base leading-none flex-shrink-0">{meta.icon}</span>
+                        <span className="leading-none flex-shrink-0 flex items-center">{meta.icon}</span>
                         <span className="flex-1 text-sm font-semibold text-waffle-brown truncate">{meta.label}</span>
                         <button
                           onClick={() => removeSection(key)}
@@ -1049,31 +1081,49 @@ function NodeCard({
   icon,
   label,
   children,
+  compact,
 }: {
   active: boolean;
   onClick: () => void;
   icon: React.ReactNode;
   label: string;
   children?: React.ReactNode;
+  compact?: boolean;
 }) {
   return (
     <div
       onClick={onClick}
-      className={`rounded-2xl border-2 p-4 cursor-pointer transition-all select-none ${
+      className={`rounded-2xl border-2 cursor-pointer transition-all select-none ${
+        compact ? "p-3" : "p-4"
+      } ${
         active
           ? "border-waffle-orange bg-waffle-orange/5"
           : "border-waffle-brown/10 bg-white hover:border-waffle-orange/40"
       }`}
     >
-      <div className="flex items-start justify-between mb-2">
-        <span className="text-2xl leading-none">{icon}</span>
-        {active && (
-          <span className="w-5 h-5 rounded-full bg-waffle-orange flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
-            ✓
-          </span>
-        )}
-      </div>
-      <p className="font-bold text-waffle-brown text-sm">{label}</p>
+      {compact ? (
+        <div className="flex items-center gap-2">
+          <span className="leading-none flex-shrink-0 flex items-center">{icon}</span>
+          <p className="flex-1 font-bold text-waffle-brown text-sm truncate">{label}</p>
+          {active && (
+            <span className="w-5 h-5 rounded-full bg-waffle-orange flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+              ✓
+            </span>
+          )}
+        </div>
+      ) : (
+        <>
+          <div className="flex items-start justify-between mb-2">
+            <span className="text-2xl leading-none">{icon}</span>
+            {active && (
+              <span className="w-5 h-5 rounded-full bg-waffle-orange flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+                ✓
+              </span>
+            )}
+          </div>
+          <p className="font-bold text-waffle-brown text-sm">{label}</p>
+        </>
+      )}
       {children}
     </div>
   );

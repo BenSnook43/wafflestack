@@ -1,25 +1,18 @@
-import { NextRequest, NextResponse } from "next/server";
-import Stripe from "stripe";
+import { NextResponse } from "next/server";
 import { createAuthClient } from "@/lib/supabase-auth";
 import { supabase } from "@/lib/supabase";
+import { stripe } from "@/lib/stripe";
 
-function getStripe() {
-  return new Stripe(process.env.STRIPE_SECRET_KEY!);
-}
-
-export async function POST(req: NextRequest) {
-  const stripe = getStripe();
-  // Require an authenticated session
+export async function POST() {
   const authClient = await createAuthClient();
   const { data: { user } } = await authClient.auth.getUser();
   if (!user?.email) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  // Fetch the user record to get or create a Stripe customer
   const { data: userRecord } = await supabase
     .from("users")
-    .select("id, stripe_customer_id, subscription_status")
+    .select("id, email, stripe_customer_id, subscription_status")
     .eq("email", user.email)
     .single();
 
@@ -27,15 +20,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  // Already on an active paid subscription — send to portal instead
   if (userRecord.subscription_status === "active") {
     return NextResponse.json({ error: "Already subscribed" }, { status: 400 });
   }
 
-  // Get or create the Stripe customer
+  // Create Stripe customer if not yet created
   let customerId = userRecord.stripe_customer_id;
   if (!customerId) {
-    const customer = await stripe.customers.create({ email: user.email });
+    const customer = await stripe.customers.create({ email: userRecord.email });
     customerId = customer.id;
     await supabase
       .from("users")
@@ -45,22 +37,16 @@ export async function POST(req: NextRequest) {
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
+  // No Stripe trial — WaffleStack handles the free trial period without a card.
+  // When the user hits this flow, the trial is over and billing starts immediately.
   const session = await stripe.checkout.sessions.create({
     customer: customerId,
     mode: "subscription",
-    line_items: [
-      {
-        price: process.env.STRIPE_PRICE_ID!,
-        quantity: 1,
-      },
-    ],
-    // 30-day free trial — card captured now, billed after trial
-    subscription_data: {
-      trial_period_days: 30,
-    },
-    success_url: `${siteUrl}/dashboard?checkout=success`,
-    cancel_url: `${siteUrl}/pricing`,
+    line_items: [{ price: process.env.STRIPE_PRICE_ID!, quantity: 1 }],
+    success_url: `${siteUrl}/dashboard?subscribed=1`,
+    cancel_url: `${siteUrl}/subscribe`,
     allow_promotion_codes: true,
+    metadata: { user_id: userRecord.id },
   });
 
   return NextResponse.json({ url: session.url });

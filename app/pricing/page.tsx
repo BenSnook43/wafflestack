@@ -14,8 +14,8 @@ const FAQS = [
     a: "Each subreddit, RSS feed, stock ticker, or data connector counts as one source. Weather and Hacker News each count as one. 15 is generous — most readers use 5–8.",
   },
   {
-    q: "What happens after the free month?",
-    a: "We'll email you a reminder before the trial ends. If you add a card, billing starts automatically at $5/month. If not, your digest pauses — your settings are saved so you can resume any time.",
+    q: "What happens after the two-week trial?",
+    a: "We'll show you a prompt to subscribe before your trial ends. Add a card and billing starts at $5/month. If not, your digest pauses — your settings are saved so you can resume any time.",
   },
   {
     q: "Can I cancel?",
@@ -48,7 +48,7 @@ export default function PricingPage() {
           {/* Trial banner */}
           <div className="bg-waffle-orange px-6 py-3 text-center">
             <p className="text-white font-bold text-sm tracking-wide">
-              YOUR FIRST MONTH IS FREE — NO CARD NEEDED
+              TWO WEEKS FREE — NO CARD NEEDED
             </p>
           </div>
 
@@ -78,7 +78,7 @@ export default function PricingPage() {
               href="/onboard"
               className="block w-full text-center bg-waffle-brown hover:bg-waffle-espresso text-waffle-cream font-bold px-6 py-4 rounded-full transition-colors"
             >
-              Start your free month →
+              Start your free two weeks →
             </Link>
 
             <p className="text-xs text-waffle-brown/30 text-center">

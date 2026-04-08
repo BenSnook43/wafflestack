@@ -13,7 +13,7 @@ create table public.users (
   active                  boolean not null default true,
 
   -- Billing / trial
-  trial_ends_at           timestamptz not null default (now() + interval '30 days'),
+  trial_ends_at           timestamptz not null default (now() + interval '14 days'),
   subscription_status     text not null default 'trialing'
                           check (subscription_status in ('trialing','active','past_due','cancelled')),
   emails_sent             integer not null default 0,
