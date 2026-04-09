@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAuthClient } from "@/lib/supabase-auth";
 import { supabase } from "@/lib/supabase";
-import { validateSubreddits } from "@/lib/validate-subreddits";
 
 export async function PATCH(req: NextRequest) {
   // Verify session
@@ -25,17 +24,6 @@ export async function PATCH(req: NextRequest) {
 
   if (userErr || !userRecord) {
     return NextResponse.json({ error: "User not found." }, { status: 404 });
-  }
-
-  // Validate subreddits if provided
-  if (Array.isArray(subreddits) && subreddits.length > 0) {
-    const invalid = await validateSubreddits(subreddits);
-    if (invalid.length > 0) {
-      return NextResponse.json(
-        { error: `These subreddits don't exist: ${invalid.join(", ")}` },
-        { status: 400 }
-      );
-    }
   }
 
   // Update active status on users table if provided
