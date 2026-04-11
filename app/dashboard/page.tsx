@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createAuthClient } from "@/lib/supabase-auth";
 import { supabase } from "@/lib/supabase";
+import { getStripe } from "@/lib/stripe";
 import DashboardClient, { type Block } from "./DashboardClient";
 
 function deriveBlocks(prefs: {
@@ -47,7 +48,11 @@ function deriveBlocks(prefs: {
   return blocks;
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ subscribed?: string }>;
+}) {
   const authClient = await createAuthClient();
   const { data: { user } } = await authClient.auth.getUser();
 
@@ -55,9 +60,44 @@ export default async function DashboardPage() {
 
   const { data: userRecord } = await supabase
     .from("users")
-    .select("id, email, active, trial_ends_at, subscription_status, emails_sent")
+    .select("id, email, active, trial_ends_at, subscription_status, emails_sent, stripe_customer_id, stripe_subscription_id")
     .eq("email", user.email!)
     .single();
+
+  // When redirected back from Stripe checkout, sync subscription status directly
+  // in case the webhook hasn't fired yet.
+  const params = await searchParams;
+  if (params.subscribed === "1" && userRecord?.subscription_status !== "active") {
+    try {
+      const stripe = getStripe();
+      let subId = userRecord?.stripe_subscription_id;
+      // Fall back to listing the customer's subscriptions if we don't have the ID yet
+      if (!subId && userRecord?.stripe_customer_id) {
+        const subs = await stripe.subscriptions.list({
+          customer: userRecord.stripe_customer_id,
+          status: "active",
+          limit: 1,
+        });
+        subId = subs.data[0]?.id ?? null;
+      }
+      if (subId) {
+        const sub = await stripe.subscriptions.retrieve(subId);
+        if (sub.status === "active") {
+          await supabase
+            .from("users")
+            .update({
+              subscription_status: "active",
+              stripe_subscription_id: sub.id,
+            })
+            .eq("id", userRecord!.id);
+          // Re-fetch so the page reflects updated state
+          userRecord!.subscription_status = "active";
+        }
+      }
+    } catch (e) {
+      console.error("Post-checkout Stripe sync failed:", e);
+    }
+  }
 
   // Trial expired and not a paying subscriber → paywall
   const trialExpired =

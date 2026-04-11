@@ -46,8 +46,8 @@ export async function POST(req: NextRequest) {
     user = result.data;
     userError = result.error;
   } else {
-    // New user — start 30-day trial
-    const trialEndsAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    // New user — start 14-day trial
+    const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
     const result = await supabase
       .from("users")
       .insert({

@@ -579,6 +579,12 @@ export default function DashboardClient(props: Props) {
                 />
               </button>
             </div>
+            <a
+              href="/settings"
+              className="text-xs text-waffle-brown/40 hover:text-waffle-brown transition-colors font-semibold"
+            >
+              Settings
+            </a>
             <button
               onClick={handleSignOut}
               className="text-xs text-waffle-brown/40 hover:text-waffle-brown transition-colors font-semibold"
