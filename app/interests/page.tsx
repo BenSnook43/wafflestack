@@ -123,7 +123,7 @@ const INTEREST_PACKS = [
 ];
 
 const SOURCE_TYPES = [
-  { icon: <span className="font-black text-orange-500 text-xl">↑</span>, name: "Reddit", description: "Any subreddit, from niche to mainstream" },
+  { icon: <img src="/icons/reddit.png" alt="Reddit" className="w-7 h-7 object-contain" />, name: "Reddit", description: "Any subreddit, from niche to mainstream" },
   { icon: "📈", name: "Stock Tickers", description: "Live price data and daily moves" },
   { icon: "⛅", name: "Weather", description: "Morning forecast for your city" },
   { icon: <span className="font-extrabold bg-orange-600 text-white w-7 h-7 flex items-center justify-center rounded text-xs">Y</span>, name: "Hacker News", description: "Top stories from the tech community" },
