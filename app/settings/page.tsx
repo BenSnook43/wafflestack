@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createAuthClient } from "@/lib/supabase-auth";
 import { supabase } from "@/lib/supabase";
+import { getStripe } from "@/lib/stripe";
 import SignOutButton from "./SignOutButton";
 
 function statusLabel(status: string): { text: string; color: string } {
@@ -21,11 +22,60 @@ export default async function SettingsPage() {
 
   const { data: userRecord } = await supabase
     .from("users")
-    .select("email, subscription_status, trial_ends_at, stripe_customer_id, cancelled_at")
+    .select("email, subscription_status, trial_ends_at, stripe_customer_id, stripe_subscription_id, cancelled_at")
     .eq("email", user.email!)
     .single();
 
-  const status = userRecord?.subscription_status ?? "trialing";
+  // If there's a Stripe customer but the DB still shows trialing with no subscription ID,
+  // do a live lookup to catch cases where the webhook didn't fire (e.g. local dev tunnel).
+  let status = userRecord?.subscription_status ?? "trialing";
+  if (
+    userRecord?.stripe_customer_id &&
+    !userRecord?.stripe_subscription_id &&
+    status === "trialing"
+  ) {
+    try {
+      const stripe = getStripe();
+      const subs = await stripe.subscriptions.list({
+        customer: userRecord.stripe_customer_id,
+        limit: 1,
+        status: "all",
+      });
+      const latest = subs.data[0];
+      if (latest) {
+        const mapped =
+          latest.status === "active" ? "active"
+          : latest.status === "trialing" ? "trialing"
+          : latest.status === "past_due" || latest.status === "unpaid" ? "past_due"
+          : latest.status === "canceled" ? "cancelled"
+          : "trialing";
+
+        if (mapped !== status) {
+          // Sync back to Supabase so subsequent loads don't hit Stripe again
+          await supabase
+            .from("users")
+            .update({
+              subscription_status: mapped,
+              stripe_subscription_id: latest.id,
+              ...(latest.trial_end
+                ? { trial_ends_at: new Date(latest.trial_end * 1000).toISOString() }
+                : {}),
+            })
+            .eq("stripe_customer_id", userRecord.stripe_customer_id);
+
+          status = mapped;
+        } else {
+          // Same status but sync the subscription ID
+          await supabase
+            .from("users")
+            .update({ stripe_subscription_id: latest.id })
+            .eq("stripe_customer_id", userRecord.stripe_customer_id);
+        }
+      }
+    } catch {
+      // Non-fatal — fall back to DB value
+    }
+  }
   const { text: statusText, color: statusColor } = statusLabel(status);
   const hasStripe = !!userRecord?.stripe_customer_id;
 
