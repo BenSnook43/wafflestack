@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
-export type BlockType = "weather" | "reddit" | "stocks" | "hacker_news" | "rss" | "separator";
+export type BlockType = "weather" | "reddit" | "stocks" | "hacker_news" | "rss" | "substack" | "separator";
 
 export interface Block {
   id: string;
@@ -142,6 +142,73 @@ const INSPIRATION_PACKS: InspirationPack[] = [
   },
 ];
 
+// ── Curated RSS feeds ────────────────────────────────────────────────────────
+
+interface CuratedFeed {
+  name: string;
+  url: string;
+  domain: string;
+  description: string;
+  category: string;
+}
+
+const CURATED_FEEDS: CuratedFeed[] = [
+  // Tech
+  { name: "Ars Technica",       url: "https://feeds.arstechnica.com/arstechnica/index",                                                    domain: "arstechnica.com",      description: "In-depth tech news and analysis",              category: "Tech" },
+  { name: "The Verge",          url: "https://www.theverge.com/rss/index.xml",                                                             domain: "theverge.com",         description: "Tech, science, and culture",                   category: "Tech" },
+  { name: "Wired",              url: "https://www.wired.com/feed/rss",                                                                     domain: "wired.com",            description: "The latest tech news from WIRED",              category: "Tech" },
+  { name: "TechCrunch",         url: "https://techcrunch.com/feed/",                                                                       domain: "techcrunch.com",       description: "Startup and tech industry news",               category: "Tech" },
+  // Investing
+  { name: "MarketWatch",        url: "https://feeds.marketwatch.com/marketwatch/topstories/",                                              domain: "marketwatch.com",      description: "Top financial stories and market data",        category: "Investing" },
+  { name: "Investopedia",       url: "https://www.investopedia.com/feedbuilder/feed/getfeed/?feedName=rss_headline",                       domain: "investopedia.com",     description: "Finance education and market insights",        category: "Investing" },
+  { name: "Seeking Alpha",      url: "https://seekingalpha.com/market_currents.xml",                                                       domain: "seekingalpha.com",     description: "Stock market analysis and commentary",         category: "Investing" },
+  { name: "The Motley Fool",    url: "https://www.fool.com/feeds/index.aspx",                                                              domain: "fool.com",             description: "Stock picks and investing advice",             category: "Investing" },
+  // World News
+  { name: "BBC News",           url: "https://feeds.bbci.co.uk/news/rss.xml",                                                             domain: "bbc.co.uk",            description: "Top stories from BBC News",                    category: "World News" },
+  { name: "Reuters",            url: "https://feeds.reuters.com/reuters/topNews",                                                          domain: "reuters.com",          description: "Breaking news from around the world",          category: "World News" },
+  { name: "The Guardian",       url: "https://www.theguardian.com/world/rss",                                                              domain: "theguardian.com",      description: "World news from The Guardian",                 category: "World News" },
+  { name: "Al Jazeera",         url: "https://www.aljazeera.com/xml/rss/all.xml",                                                          domain: "aljazeera.com",        description: "News from a global perspective",               category: "World News" },
+  // Design
+  { name: "Smashing Magazine",  url: "https://www.smashingmagazine.com/feed/",                                                             domain: "smashingmagazine.com", description: "Web design and development articles",          category: "Design" },
+  { name: "A List Apart",       url: "https://alistapart.com/main/feed/",                                                                  domain: "alistapart.com",       description: "Articles for people who make websites",        category: "Design" },
+  { name: "CSS-Tricks",         url: "https://css-tricks.com/feed/",                                                                       domain: "css-tricks.com",       description: "Tips and tricks on CSS front-end dev",         category: "Design" },
+  { name: "Sidebar",            url: "https://sidebar.io/feed.xml",                                                                        domain: "sidebar.io",           description: "Five design links every weekday",              category: "Design" },
+  // Science
+  { name: "New Scientist",      url: "https://www.newscientist.com/feed/home/",                                                            domain: "newscientist.com",     description: "Science news and discoveries",                 category: "Science" },
+  { name: "ScienceDaily",       url: "https://www.sciencedaily.com/rss/all.xml",                                                           domain: "sciencedaily.com",     description: "Latest research from universities worldwide",  category: "Science" },
+  { name: "Phys.org",           url: "https://phys.org/rss-feed/",                                                                         domain: "phys.org",             description: "Physics, tech, and science news",              category: "Science" },
+  { name: "NASA News",          url: "https://www.nasa.gov/rss/dyn/breaking_news.rss",                                                     domain: "nasa.gov",             description: "Breaking news from NASA",                      category: "Science" },
+  // Crypto
+  { name: "CoinDesk",           url: "https://www.coindesk.com/arc/outboundfeeds/rss/",                                                    domain: "coindesk.com",         description: "Crypto and blockchain news",                   category: "Crypto" },
+  { name: "Cointelegraph",      url: "https://cointelegraph.com/rss",                                                                      domain: "cointelegraph.com",    description: "Cryptocurrency market and analysis",           category: "Crypto" },
+  { name: "Decrypt",            url: "https://decrypt.co/feed",                                                                            domain: "decrypt.co",           description: "Web3, DeFi, and NFT coverage",                 category: "Crypto" },
+  { name: "The Block",          url: "https://www.theblock.co/rss.xml",                                                                    domain: "theblock.co",          description: "Institutional crypto research and news",       category: "Crypto" },
+  // Health
+  { name: "Examine.com",        url: "https://examine.com/feed/",                                                                          domain: "examine.com",          description: "Evidence-based nutrition and supplement info", category: "Health" },
+  { name: "Healthline",         url: "https://www.healthline.com/rss/news",                                                                domain: "healthline.com",       description: "Medical news and wellness tips",               category: "Health" },
+  { name: "NHS News",           url: "https://www.nhs.uk/news/feed/",                                                                      domain: "nhs.uk",               description: "Health news from the UK's NHS",               category: "Health" },
+  { name: "MedPage Today",      url: "https://www.medpagetoday.com/rss/headlines.xml",                                                     domain: "medpagetoday.com",     description: "Medical news for healthcare professionals",    category: "Health" },
+  // Gaming
+  { name: "Rock Paper Shotgun", url: "https://www.rockpapershotgun.com/feed/",                                                             domain: "rockpapershotgun.com", description: "PC gaming news and reviews",                   category: "Gaming" },
+  { name: "Eurogamer",          url: "https://www.eurogamer.net/feed",                                                                     domain: "eurogamer.net",        description: "Game reviews, news, and guides",               category: "Gaming" },
+  { name: "PC Gamer",           url: "https://www.pcgamer.com/rss/",                                                                       domain: "pcgamer.com",          description: "PC gaming features and hardware reviews",      category: "Gaming" },
+  { name: "Kotaku",             url: "https://kotaku.com/rss",                                                                             domain: "kotaku.com",           description: "Gaming culture, reviews, and commentary",      category: "Gaming" },
+];
+
+const CURATED_CATEGORIES = ["All", "Tech", "Investing", "World News", "Design", "Science", "Crypto", "Health", "Gaming"];
+
+const CATEGORY_EMOJI: Record<string, string> = {
+  "All": "⚡",
+  "Tech": "💻",
+  "Investing": "📈",
+  "World News": "🌍",
+  "Design": "🎨",
+  "Science": "🔬",
+  "Crypto": "₿",
+  "Health": "🏃",
+  "Gaming": "🎮",
+};
+
 // ── Brandfetch logo component ────────────────────────────────────────────────
 
 const BRANDFETCH_CLIENT_ID = process.env.NEXT_PUBLIC_BRANDFETCH_CLIENT_ID ?? "";
@@ -203,7 +270,7 @@ function uid() {
 
 // ── Derive flat state from blocks array ─────────────────────────────────────
 
-const DEFAULT_SECTION_ORDER = ["weather", "stocks", "reddit", "hacker_news", "rss"];
+const DEFAULT_SECTION_ORDER = ["weather", "stocks", "reddit", "hacker_news", "rss", "substack"];
 
 function blocksToState(blocks: Block[]) {
   const weather = blocks.find((b) => b.type === "weather");
@@ -211,6 +278,11 @@ function blocksToState(blocks: Block[]) {
   const reddit = blocks.find((b) => b.type === "reddit");
   const rss = blocks.find((b) => b.type === "rss");
   const hackerNews = blocks.some((b) => b.type === "hacker_news");
+
+  // Split rss_feeds into Substack vs generic by URL pattern
+  const allFeeds = rss?.config.feeds ?? [];
+  const substackFeeds = allFeeds.filter((url) => url.includes(".substack.com"));
+  const genericFeeds = allFeeds.filter((url) => !url.includes(".substack.com"));
 
   // Derive order from blocks (which already respect DB section_order), then append missing
   const fromBlocks = blocks.map((b) => b.type).filter((t) => DEFAULT_SECTION_ORDER.includes(t as string));
@@ -225,9 +297,10 @@ function blocksToState(blocks: Block[]) {
     subreddits: reddit?.config.subreddits ?? [],
     customSub: "",
     hackerNews,
-    rss: !!rss,
-    feeds: rss?.config.feeds ?? [],
+    rss: genericFeeds.length > 0,
+    feeds: genericFeeds,
     customFeed: "",
+    substackFeeds,
     sectionOrder,
   };
 }
@@ -241,6 +314,7 @@ function stateToSavePayload(state: StackState) {
     if (key === "reddit") return state.subreddits.length > 0;
     if (key === "hacker_news") return state.hackerNews;
     if (key === "rss") return state.feeds.length > 0;
+    if (key === "substack") return state.substackFeeds.length > 0;
     return false;
   });
 
@@ -250,7 +324,7 @@ function stateToSavePayload(state: StackState) {
     stocks: state.stocks
       ? state.stockTickers.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean)
       : [],
-    rss_feeds: state.feeds,
+    rss_feeds: [...state.feeds, ...state.substackFeeds],
     hacker_news: state.hackerNews,
     section_order: sectionOrder,
   };
@@ -282,6 +356,8 @@ export default function DashboardClient(props: Props) {
   const [active, setActive] = useState(props.active);
   const [saveStatus, setSaveStatus] = useState<"idle" | "loading" | "saved" | "error">("idle");
   const [subCheck, setSubCheck] = useState<"idle" | "checking" | "invalid">("idle");
+  const [substackInput, setSubstackInput] = useState("");
+  const [substackCheck, setSubstackCheck] = useState<"idle" | "checking" | "invalid">("idle");
   const [inspiredOpen, setInspiredOpen] = useState(false);
   const [tickerQuery, setTickerQuery] = useState("");
   const [tickerResults, setTickerResults] = useState<{ symbol: string; description: string }[]>([]);
@@ -293,6 +369,13 @@ export default function DashboardClient(props: Props) {
   const dragKey = useRef<string | null>(null);
   const dragPosition = useRef<"before" | "after" | null>(null);
   const [dragOver, setDragOver] = useState<{ key: string; position: "before" | "after" } | null>(null);
+  const [feedValidation, setFeedValidation] = useState<{
+    status: "idle" | "loading" | "valid" | "invalid";
+    feedUrl?: string;
+    title?: string;
+  }>({ status: "idle" });
+  const [curatedCategory, setCuratedCategory] = useState<string>("All");
+  const feedDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function toggleSub(sub: string) {
     setStack((s) => ({
@@ -322,6 +405,36 @@ export default function DashboardClient(props: Props) {
       // Network error — allow adding anyway, server will validate on save
       setStack((s) => ({ ...s, subreddits: [...s.subreddits, cleaned], customSub: "" }));
       setSubCheck("idle");
+    }
+  }
+
+  async function addSubstack() {
+    const raw = substackInput.trim();
+    if (!raw) return;
+
+    // Strip full URL to slug, accept bare slug
+    const urlMatch = raw.match(/^https?:\/\/([^.]+)\.substack\.com/i);
+    const slug = urlMatch ? urlMatch[1].toLowerCase() : raw.toLowerCase();
+    const feedUrl = `https://${slug}.substack.com/feed`;
+
+    if (stack.substackFeeds.includes(feedUrl)) return;
+
+    setSubstackCheck("checking");
+    try {
+      const res = await fetch(`/api/validate-substack?slug=${encodeURIComponent(slug)}`);
+      const data = await res.json();
+      if (data.valid) {
+        setStack((s) => ({ ...s, substackFeeds: [...s.substackFeeds, data.url] }));
+        setSubstackInput("");
+        setSubstackCheck("idle");
+      } else {
+        setSubstackCheck("invalid");
+      }
+    } catch {
+      // Fail open on network error
+      setStack((s) => ({ ...s, substackFeeds: [...s.substackFeeds, feedUrl] }));
+      setSubstackInput("");
+      setSubstackCheck("idle");
     }
   }
 
@@ -434,19 +547,54 @@ export default function DashboardClient(props: Props) {
         case "reddit": return { ...s, subreddits: [] };
         case "hacker_news": return { ...s, hackerNews: false };
         case "rss": return { ...s, rss: false, feeds: [] };
+        case "substack": return { ...s, substackFeeds: [] };
         default: return s;
       }
     });
   }
 
-  // Clean up debounce on unmount
-  useEffect(() => () => { if (tickerDebounce.current) clearTimeout(tickerDebounce.current); }, []);
+  // Clean up debounces on unmount
+  useEffect(() => () => {
+    if (tickerDebounce.current) clearTimeout(tickerDebounce.current);
+    if (feedDebounce.current) clearTimeout(feedDebounce.current);
+  }, []);
 
-  function addFeed() {
-    const url = stack.customFeed.trim();
-    if (url && !stack.feeds.includes(url)) {
-      setStack((s) => ({ ...s, feeds: [...s.feeds, url], customFeed: "" }));
+  function addValidatedFeed() {
+    const url = feedValidation.feedUrl;
+    if (!url || stack.feeds.includes(url)) return;
+    setStack((s) => ({ ...s, feeds: [...s.feeds, url], customFeed: "" }));
+    setFeedValidation({ status: "idle" });
+  }
+
+  function addFeedUrl(url: string) {
+    if (!url || stack.feeds.includes(url)) return;
+    setStack((s) => ({ ...s, feeds: [...s.feeds, url] }));
+  }
+
+  function handleFeedInputChange(value: string) {
+    setStack((s) => ({ ...s, customFeed: value }));
+    if (feedDebounce.current) clearTimeout(feedDebounce.current);
+    if (!value.trim()) {
+      setFeedValidation({ status: "idle" });
+      return;
     }
+    setFeedValidation({ status: "idle" });
+    feedDebounce.current = setTimeout(async () => {
+      const trimmed = value.trim();
+      if (!trimmed.includes(".")) return;
+      setFeedValidation({ status: "loading" });
+      try {
+        const res = await fetch(`/api/validate-feed?url=${encodeURIComponent(trimmed)}`);
+        const data = await res.json();
+        if (data.valid) {
+          setFeedValidation({ status: "valid", feedUrl: data.feedUrl, title: data.title });
+        } else {
+          setFeedValidation({ status: "invalid" });
+        }
+      } catch {
+        setFeedValidation({ status: "invalid" });
+      }
+    }, 400);
   }
 
   function addFromInspiration(src: InspirationSource) {
@@ -475,7 +623,7 @@ export default function DashboardClient(props: Props) {
   }
 
   const hasAnyBlock =
-    stack.weather || stack.stocks || stack.subreddits.length > 0 || stack.hackerNews || stack.feeds.length > 0;
+    stack.weather || stack.stocks || stack.subreddits.length > 0 || stack.hackerNews || stack.feeds.length > 0 || stack.substackFeeds.length > 0;
 
   // Active sections in user-defined order
   const activeSectionOrder = stack.sectionOrder.filter((key) => {
@@ -484,6 +632,7 @@ export default function DashboardClient(props: Props) {
     if (key === "reddit") return stack.subreddits.length > 0;
     if (key === "hacker_news") return stack.hackerNews;
     if (key === "rss") return stack.rss && stack.feeds.length > 0;
+    if (key === "substack") return stack.substackFeeds.length > 0;
     return false;
   });
 
@@ -785,42 +934,218 @@ export default function DashboardClient(props: Props) {
               />
               <NodeCard
                 active={stack.rss}
-                onClick={() => setStack((s) => ({ ...s, rss: !s.rss, feeds: s.rss ? [] : s.feeds }))}
+                onClick={() => {
+                  const wasOn = stack.rss;
+                  setStack((s) => ({ ...s, rss: !s.rss, feeds: s.rss ? [] : s.feeds, customFeed: "" }));
+                  if (wasOn) setFeedValidation({ status: "idle" });
+                }}
                 icon="📡"
                 label="RSS Feeds"
               >
                 {stack.rss && (
-                  <div className="mt-2 space-y-2" onClick={(e) => e.stopPropagation()}>
-                    {stack.feeds.map((feed) => (
+                  <div className="mt-3 space-y-3" onClick={(e) => e.stopPropagation()}>
+
+                    {/* Already-added feed chips */}
+                    {stack.feeds.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {stack.feeds.map((feed) => {
+                          const domain = (() => { try { return new URL(feed).hostname.replace(/^www\./, ""); } catch { return feed; } })();
+                          return (
+                            <span
+                              key={feed}
+                              className="flex items-center gap-1.5 bg-waffle-pale rounded-lg px-2 py-1 text-xs text-waffle-brown/70 max-w-[160px]"
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={`https://www.google.com/s2/favicons?domain=${domain}&sz=16`}
+                                width={12}
+                                height={12}
+                                alt=""
+                                className="flex-shrink-0 rounded-sm"
+                              />
+                              <span className="truncate">{domain}</span>
+                              <button
+                                onClick={() => setStack((s) => ({ ...s, feeds: s.feeds.filter((f) => f !== feed) }))}
+                                className="text-waffle-brown/30 hover:text-red-500 transition-colors flex-shrink-0 leading-none"
+                                aria-label={`Remove ${domain}`}
+                              >
+                                ×
+                              </button>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* URL input with validation */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <div className="relative flex-1">
+                          <input
+                            type="url"
+                            value={stack.customFeed}
+                            onChange={(e) => handleFeedInputChange(e.target.value)}
+                            onKeyDown={(e) => e.key === "Enter" && feedValidation.status === "valid" && addValidatedFeed()}
+                            placeholder="Paste a feed or website URL…"
+                            className="w-full border border-waffle-brown/15 rounded-xl px-3 py-2 text-xs text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:ring-2 focus:ring-waffle-orange bg-white pr-7"
+                          />
+                          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
+                            {feedValidation.status === "loading" && (
+                              <svg className="animate-spin w-3.5 h-3.5 text-waffle-brown/40" viewBox="0 0 24 24" fill="none">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                              </svg>
+                            )}
+                            {feedValidation.status === "valid" && <span className="text-green-500 text-xs font-bold">✓</span>}
+                            {feedValidation.status === "invalid" && <span className="text-red-400 text-xs font-bold">✕</span>}
+                          </span>
+                        </div>
+                        {feedValidation.status === "valid" && (
+                          <button
+                            onClick={addValidatedFeed}
+                            className="px-3 py-2 bg-waffle-orange text-white text-xs font-semibold rounded-xl hover:bg-waffle-orange/90 transition-colors flex-shrink-0"
+                          >
+                            Add
+                          </button>
+                        )}
+                      </div>
+                      {feedValidation.status === "valid" && (
+                        <p className="text-[11px] text-green-600 px-1 truncate">
+                          Feed found{feedValidation.title ? `: ${feedValidation.title}` : ""}
+                        </p>
+                      )}
+                      {feedValidation.status === "invalid" && (
+                        <p className="text-[11px] text-red-500 px-1">No RSS feed found at this URL</p>
+                      )}
+                    </div>
+
+                    {/* Divider */}
+                    <div className="border-t border-waffle-brown/10" />
+
+                    {/* Popular feeds */}
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-bold text-waffle-brown/35 uppercase tracking-widest">Popular feeds</p>
+
+                      {/* Category tabs */}
+                      <div className="flex gap-1 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+                        {CURATED_CATEGORIES.map((cat) => (
+                          <button
+                            key={cat}
+                            onClick={() => setCuratedCategory(cat)}
+                            className={`flex-shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
+                              curatedCategory === cat
+                                ? "bg-waffle-orange text-white"
+                                : "bg-waffle-pale text-waffle-brown/55 hover:bg-waffle-golden/30"
+                            }`}
+                          >
+                            <span>{CATEGORY_EMOJI[cat]}</span>
+                            <span>{cat}</span>
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Feed grid */}
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {CURATED_FEEDS
+                          .filter((f) => curatedCategory === "All" || f.category === curatedCategory)
+                          .map((feed) => {
+                            const alreadyAdded = stack.feeds.includes(feed.url);
+                            return (
+                              <div
+                                key={feed.url}
+                                className="flex flex-col gap-1.5 p-2 rounded-xl border border-waffle-brown/10 bg-white hover:border-waffle-brown/20 transition-colors"
+                              >
+                                <div className="flex items-center justify-between gap-1">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={`https://www.google.com/s2/favicons?domain=${feed.domain}&sz=32`}
+                                    width={16}
+                                    height={16}
+                                    alt=""
+                                    className="rounded-sm flex-shrink-0"
+                                  />
+                                  <button
+                                    onClick={() => !alreadyAdded && addFeedUrl(feed.url)}
+                                    disabled={alreadyAdded}
+                                    className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 transition-colors ${
+                                      alreadyAdded
+                                        ? "bg-waffle-orange/15 text-waffle-orange cursor-default"
+                                        : "bg-waffle-brown/8 hover:bg-waffle-orange hover:text-white text-waffle-brown/40"
+                                    }`}
+                                    aria-label={alreadyAdded ? `${feed.name} added` : `Add ${feed.name}`}
+                                  >
+                                    {alreadyAdded ? "✓" : "+"}
+                                  </button>
+                                </div>
+                                <p className="text-[11px] font-bold text-waffle-brown leading-tight truncate">{feed.name}</p>
+                                <p className="text-[10px] text-waffle-brown/45 leading-tight line-clamp-2">{feed.description}</p>
+                              </div>
+                            );
+                          })
+                        }
+                      </div>
+                    </div>
+
+                  </div>
+                )}
+              </NodeCard>
+
+              <NodeCard
+                active={stack.substackFeeds.length > 0}
+                onClick={() => {
+                  if (stack.substackFeeds.length > 0) {
+                    setStack((s) => ({ ...s, substackFeeds: [] }));
+                  }
+                }}
+                icon="📬"
+                label="Substack"
+              >
+                <div className="mt-2 space-y-2" onClick={(e) => e.stopPropagation()}>
+                  {stack.substackFeeds.map((url) => {
+                    const slug = url.match(/https?:\/\/([^.]+)\.substack\.com/)?.[1] ?? url;
+                    return (
                       <div
-                        key={feed}
+                        key={url}
                         className="flex items-center justify-between gap-1 text-xs text-waffle-brown/60 bg-waffle-pale rounded-lg px-2 py-1.5"
                       >
-                        <span className="truncate">{feed}</span>
+                        <span className="truncate font-medium">{slug}</span>
                         <button
-                          onClick={() => setStack((s) => ({ ...s, feeds: s.feeds.filter((f) => f !== feed) }))}
-                          className="text-waffle-brown/30 hover:text-red-500 transition-colors flex-shrink-0"
+                          onClick={() => setStack((s) => ({ ...s, substackFeeds: s.substackFeeds.filter((f) => f !== url) }))}
+                          className="text-waffle-brown/30 hover:text-red-500 transition-colors flex-shrink-0 leading-none"
+                          aria-label={`Remove ${slug}`}
                         >
                           ×
                         </button>
                       </div>
-                    ))}
-                    <div className="flex gap-1.5">
-                      <input
-                        type="url"
-                        value={stack.customFeed}
-                        onChange={(e) => setStack((s) => ({ ...s, customFeed: e.target.value }))}
-                        onKeyDown={(e) => e.key === "Enter" && addFeed()}
-                        onBlur={addFeed}
-                        placeholder="Feed URL…"
-                        className="flex-1 border-b border-waffle-brown/20 bg-transparent text-xs text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:border-waffle-orange py-1"
-                      />
-                      <button onClick={addFeed} className="text-xs font-semibold text-waffle-orange">
-                        Add
-                      </button>
-                    </div>
+                    );
+                  })}
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={substackInput}
+                      onChange={(e) => {
+                        setSubstackInput(e.target.value);
+                        if (substackCheck === "invalid") setSubstackCheck("idle");
+                      }}
+                      onKeyDown={(e) => e.key === "Enter" && addSubstack()}
+                      disabled={substackCheck === "checking"}
+                      placeholder="e.g. paulgraham"
+                      className="flex-1 border-b border-waffle-brown/20 bg-transparent text-xs text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:border-waffle-orange py-1 disabled:opacity-50"
+                    />
+                    <button
+                      onClick={addSubstack}
+                      disabled={substackCheck === "checking"}
+                      className="text-xs font-semibold text-waffle-orange disabled:opacity-50"
+                    >
+                      {substackCheck === "checking" ? "Checking…" : "Add"}
+                    </button>
                   </div>
-                )}
+                  {substackCheck === "invalid" && (
+                    <p className="text-xs text-red-500 px-0.5">
+                      No Substack found at {substackInput.trim().toLowerCase().replace(/^https?:\/\//, "").split(".")[0]}.substack.com
+                    </p>
+                  )}
+                </div>
               </NodeCard>
             </div>
           </section>
@@ -845,6 +1170,7 @@ export default function DashboardClient(props: Props) {
                     reddit: { icon: <img src="/icons/reddit.png" width={16} height={16} alt="Reddit" className="rounded-full" />, label: "Reddit" },
                     hacker_news: { icon: <img src="/icons/hacker-news.png" width={16} height={16} alt="Hacker News" className="rounded" />, label: "Hacker News" },
                     rss: { icon: "📡", label: "RSS Feeds" },
+                    substack: { icon: "📬", label: "Substack" },
                   };
                   const meta = sectionMeta[key];
 
@@ -866,6 +1192,16 @@ export default function DashboardClient(props: Props) {
                         key: feed,
                         label: short,
                         onRemove: () => setStack((s) => ({ ...s, feeds: s.feeds.filter((f) => f !== feed) })),
+                      });
+                    });
+                  }
+                  if (key === "substack") {
+                    stack.substackFeeds.forEach((url) => {
+                      const slug = url.match(/https?:\/\/([^.]+)\.substack\.com/)?.[1] ?? url;
+                      subItems.push({
+                        key: url,
+                        label: slug,
+                        onRemove: () => setStack((s) => ({ ...s, substackFeeds: s.substackFeeds.filter((f) => f !== url) })),
                       });
                     });
                   }
