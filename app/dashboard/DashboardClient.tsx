@@ -197,6 +197,8 @@ const CURATED_FEEDS: CuratedFeed[] = [
 
 const CURATED_CATEGORIES = ["All", "Tech", "Investing", "World News", "Design", "Science", "Crypto", "Health", "Gaming"];
 
+const CURATED_FEEDS_INITIAL_COUNT = 6;
+
 const CATEGORY_EMOJI: Record<string, string> = {
   "All": "⚡",
   "Tech": "💻",
@@ -375,6 +377,7 @@ export default function DashboardClient(props: Props) {
     title?: string;
   }>({ status: "idle" });
   const [curatedCategory, setCuratedCategory] = useState<string>("All");
+  const [showAllCuratedFeeds, setShowAllCuratedFeeds] = useState(false);
   const feedDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function toggleSub(sub: string) {
@@ -762,7 +765,7 @@ export default function DashboardClient(props: Props) {
             <h3 className="text-xs font-bold text-waffle-brown/40 uppercase tracking-widest flex items-center gap-2">
               <span>📡</span> Live Vitals
             </h3>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-3">
               <NodeCard
                 active={stack.weather}
                 onClick={() => setStack((s) => ({ ...s, weather: !s.weather }))}
@@ -925,7 +928,7 @@ export default function DashboardClient(props: Props) {
             <h3 className="text-xs font-bold text-waffle-brown/40 uppercase tracking-widest flex items-center gap-2">
               <span>🖥</span> The Deep End
             </h3>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-3">
               <NodeCard
                 active={stack.hackerNews}
                 onClick={() => setStack((s) => ({ ...s, hackerNews: !s.hackerNews }))}
@@ -937,7 +940,10 @@ export default function DashboardClient(props: Props) {
                 onClick={() => {
                   const wasOn = stack.rss;
                   setStack((s) => ({ ...s, rss: !s.rss, feeds: s.rss ? [] : s.feeds, customFeed: "" }));
-                  if (wasOn) setFeedValidation({ status: "idle" });
+                  if (wasOn) {
+                    setFeedValidation({ status: "idle" });
+                    setShowAllCuratedFeeds(false);
+                  }
                 }}
                 icon="📡"
                 label="RSS Feeds"
@@ -1031,7 +1037,7 @@ export default function DashboardClient(props: Props) {
                         {CURATED_CATEGORIES.map((cat) => (
                           <button
                             key={cat}
-                            onClick={() => setCuratedCategory(cat)}
+                            onClick={() => { setCuratedCategory(cat); setShowAllCuratedFeeds(false); }}
                             className={`flex-shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
                               curatedCategory === cat
                                 ? "bg-waffle-orange text-white"
@@ -1045,45 +1051,62 @@ export default function DashboardClient(props: Props) {
                       </div>
 
                       {/* Feed grid */}
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {CURATED_FEEDS
-                          .filter((f) => curatedCategory === "All" || f.category === curatedCategory)
-                          .map((feed) => {
-                            const alreadyAdded = stack.feeds.includes(feed.url);
-                            return (
-                              <div
-                                key={feed.url}
-                                className="flex flex-col gap-1.5 p-2 rounded-xl border border-waffle-brown/10 bg-white hover:border-waffle-brown/20 transition-colors"
-                              >
-                                <div className="flex items-center justify-between gap-1">
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img
-                                    src={`https://www.google.com/s2/favicons?domain=${feed.domain}&sz=32`}
-                                    width={16}
-                                    height={16}
-                                    alt=""
-                                    className="rounded-sm flex-shrink-0"
-                                  />
-                                  <button
-                                    onClick={() => !alreadyAdded && addFeedUrl(feed.url)}
-                                    disabled={alreadyAdded}
-                                    className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 transition-colors ${
-                                      alreadyAdded
-                                        ? "bg-waffle-orange/15 text-waffle-orange cursor-default"
-                                        : "bg-waffle-brown/8 hover:bg-waffle-orange hover:text-white text-waffle-brown/40"
-                                    }`}
-                                    aria-label={alreadyAdded ? `${feed.name} added` : `Add ${feed.name}`}
+                      {(() => {
+                        const filtered = CURATED_FEEDS.filter(
+                          (f) => curatedCategory === "All" || f.category === curatedCategory
+                        );
+                        const visible = showAllCuratedFeeds
+                          ? filtered
+                          : filtered.slice(0, CURATED_FEEDS_INITIAL_COUNT);
+                        return (
+                          <>
+                            <div className="grid grid-cols-3 gap-1.5">
+                              {visible.map((feed) => {
+                                const alreadyAdded = stack.feeds.includes(feed.url);
+                                return (
+                                  <div
+                                    key={feed.url}
+                                    className="flex flex-col gap-1.5 p-2 rounded-xl border border-waffle-brown/10 bg-white hover:border-waffle-brown/20 transition-colors"
                                   >
-                                    {alreadyAdded ? "✓" : "+"}
-                                  </button>
-                                </div>
-                                <p className="text-[11px] font-bold text-waffle-brown leading-tight truncate">{feed.name}</p>
-                                <p className="text-[10px] text-waffle-brown/45 leading-tight line-clamp-2">{feed.description}</p>
-                              </div>
-                            );
-                          })
-                        }
-                      </div>
+                                    <div className="flex items-center justify-between gap-1">
+                                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                                      <img
+                                        src={`https://www.google.com/s2/favicons?domain=${feed.domain}&sz=32`}
+                                        width={16}
+                                        height={16}
+                                        alt=""
+                                        className="rounded-sm flex-shrink-0"
+                                      />
+                                      <button
+                                        onClick={() => !alreadyAdded && addFeedUrl(feed.url)}
+                                        disabled={alreadyAdded}
+                                        className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 transition-colors ${
+                                          alreadyAdded
+                                            ? "bg-waffle-orange/15 text-waffle-orange cursor-default"
+                                            : "bg-waffle-brown/8 hover:bg-waffle-orange hover:text-white text-waffle-brown/40"
+                                        }`}
+                                        aria-label={alreadyAdded ? `${feed.name} added` : `Add ${feed.name}`}
+                                      >
+                                        {alreadyAdded ? "✓" : "+"}
+                                      </button>
+                                    </div>
+                                    <p className="text-[11px] font-bold text-waffle-brown leading-tight truncate">{feed.name}</p>
+                                    <p className="text-[10px] text-waffle-brown/45 leading-tight line-clamp-2">{feed.description}</p>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            {filtered.length > CURATED_FEEDS_INITIAL_COUNT && (
+                              <button
+                                onClick={() => setShowAllCuratedFeeds((v) => !v)}
+                                className="w-full text-[11px] font-semibold text-waffle-brown/45 hover:text-waffle-orange transition-colors py-1.5 rounded-lg hover:bg-waffle-pale"
+                              >
+                                {showAllCuratedFeeds ? "Show less" : `Show all ${filtered.length} feeds`}
+                              </button>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
 
                   </div>
