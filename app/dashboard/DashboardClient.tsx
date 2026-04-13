@@ -213,6 +213,56 @@ const CATEGORY_EMOJI: Record<string, string> = {
   "Gaming": "🎮",
 };
 
+// ── Curated Substacks ────────────────────────────────────────────────────────
+
+interface CuratedSubstack {
+  slug: string;
+  name: string;
+  description: string;
+  category: string;
+}
+
+const CURATED_SUBSTACKS: CuratedSubstack[] = [
+  // Tech
+  { slug: "pragmaticengineer",  name: "The Pragmatic Engineer",  description: "Inside big tech and high-growth startups",            category: "Tech" },
+  { slug: "bigtechnology",      name: "Big Technology",          description: "Reporting on the most powerful companies in tech",    category: "Tech" },
+  { slug: "platformer",         name: "Platformer",              description: "Platform policy, social media, and Big Tech",         category: "Tech" },
+  // AI
+  { slug: "therundownai",       name: "The Rundown AI",          description: "Daily AI news and tools in 5 minutes",               category: "AI" },
+  { slug: "importai",           name: "Import AI",               description: "AI research analysis from Jack Clark",               category: "AI" },
+  { slug: "theneurondaily",     name: "The Neuron",              description: "Practical AI tools and use cases, daily",            category: "AI" },
+  // Startups
+  { slug: "lennysnewsletter",   name: "Lenny's Newsletter",      description: "Product, growth, and career advice for builders",    category: "Startups" },
+  { slug: "notboring",          name: "Not Boring",              description: "Business strategy and company deep-dives",           category: "Startups" },
+  { slug: "mostlymetrics",      name: "Mostly Metrics",          description: "SaaS metrics, benchmarks, and growth insights",     category: "Startups" },
+  // Finance
+  { slug: "thediff",            name: "The Diff",                description: "Finance and tech trends for long-term thinkers",    category: "Finance" },
+  { slug: "netinterest",        name: "Net Interest",            description: "Deep dives into fintech and financial services",     category: "Finance" },
+  { slug: "doomberg",           name: "Doomberg",                description: "Energy markets and macro through a contrarian lens", category: "Finance" },
+  // Ideas
+  { slug: "astralcodexten",     name: "Astral Codex Ten",        description: "Rationalism, psychiatry, and big ideas",            category: "Ideas" },
+  { slug: "worksinprogress",    name: "Works in Progress",       description: "Long-form pieces on progress and innovation",       category: "Ideas" },
+  { slug: "cremieux",           name: "Cremieux Recueil",        description: "Data-driven takes on social science research",      category: "Ideas" },
+  // Culture
+  { slug: "annehelen",          name: "Culture Study",           description: "Essays on culture, work, and how we live now",      category: "Culture" },
+  { slug: "heathercoxrichardson", name: "Letters from an American", description: "Daily history and politics from a historian",   category: "Culture" },
+  { slug: "thebrowser",         name: "The Browser",             description: "Five outstanding articles curated daily",           category: "Culture" },
+];
+
+const SUBSTACK_CATEGORIES = ["All", "Tech", "AI", "Startups", "Finance", "Ideas", "Culture"];
+
+const SUBSTACK_CATEGORY_EMOJI: Record<string, string> = {
+  "All":      "⭐",
+  "Tech":     "💻",
+  "AI":       "🤖",
+  "Startups": "🚀",
+  "Finance":  "📈",
+  "Ideas":    "🧠",
+  "Culture":  "🎭",
+};
+
+const CURATED_SUBSTACKS_INITIAL_COUNT = 6;
+
 // ── Brandfetch logo component ────────────────────────────────────────────────
 
 const BRANDFETCH_CLIENT_ID = process.env.NEXT_PUBLIC_BRANDFETCH_CLIENT_ID ?? "";
@@ -392,6 +442,8 @@ export default function DashboardClient(props: Props) {
   }>({ status: "idle" });
   const [curatedCategory, setCuratedCategory] = useState<string>("All");
   const [showAllCuratedFeeds, setShowAllCuratedFeeds] = useState(false);
+  const [substackCategory, setSubstackCategory] = useState<string>("All");
+  const [showAllSubstacks, setShowAllSubstacks] = useState(false);
   const feedDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function toggleSub(sub: string) {
@@ -1192,51 +1244,151 @@ export default function DashboardClient(props: Props) {
                 icon={<img src="/icons/substack.png" width={16} height={16} alt="Substack" />}
                 label="Substack"
               >
-                <div className="mt-2 space-y-2" onClick={(e) => e.stopPropagation()}>
-                  {stack.substackFeeds.map((url) => {
-                    const slug = url.match(/https?:\/\/([^.]+)\.substack\.com/)?.[1] ?? url;
-                    return (
-                      <div
-                        key={url}
-                        className="flex items-center justify-between gap-1 text-xs text-waffle-brown/60 bg-waffle-pale rounded-lg px-2 py-1.5"
-                      >
-                        <span className="truncate font-medium">{slug}</span>
+                <div className="mt-2 space-y-3" onClick={(e) => e.stopPropagation()}>
+
+                  {/* Popular newsletters */}
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-bold text-waffle-brown/35 uppercase tracking-widest">Popular newsletters</p>
+
+                    {/* Category tabs */}
+                    <div className="flex gap-1 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+                      {SUBSTACK_CATEGORIES.map((cat) => (
                         <button
-                          onClick={() => setStack((s) => ({ ...s, substackFeeds: s.substackFeeds.filter((f) => f !== url) }))}
-                          className="text-waffle-brown/30 hover:text-red-500 transition-colors flex-shrink-0 leading-none"
-                          aria-label={`Remove ${slug}`}
+                          key={cat}
+                          onClick={() => { setSubstackCategory(cat); setShowAllSubstacks(false); }}
+                          className={`flex-shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
+                            substackCategory === cat
+                              ? "bg-waffle-orange text-white"
+                              : "bg-waffle-pale text-waffle-brown/55 hover:bg-waffle-golden/30"
+                          }`}
                         >
-                          ×
+                          <span>{SUBSTACK_CATEGORY_EMOJI[cat]}</span>
+                          <span>{cat}</span>
                         </button>
-                      </div>
-                    );
-                  })}
-                  <div className="flex gap-1.5">
-                    <input
-                      type="text"
-                      value={substackInput}
-                      onChange={(e) => {
-                        setSubstackInput(e.target.value);
-                        if (substackCheck === "invalid") setSubstackCheck("idle");
-                      }}
-                      onKeyDown={(e) => e.key === "Enter" && addSubstack()}
-                      disabled={substackCheck === "checking"}
-                      placeholder="e.g. paulgraham"
-                      className="flex-1 border-b border-waffle-brown/20 bg-transparent text-xs text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:border-waffle-orange py-1 disabled:opacity-50"
-                    />
-                    <button
-                      onClick={addSubstack}
-                      disabled={substackCheck === "checking"}
-                      className="text-xs font-semibold text-waffle-orange disabled:opacity-50"
-                    >
-                      {substackCheck === "checking" ? "Checking…" : "Add"}
-                    </button>
+                      ))}
+                    </div>
+
+                    {/* Newsletter grid */}
+                    {(() => {
+                      const filtered = CURATED_SUBSTACKS.filter(
+                        (s) => substackCategory === "All" || s.category === substackCategory
+                      );
+                      const visible = showAllSubstacks
+                        ? filtered
+                        : filtered.slice(0, CURATED_SUBSTACKS_INITIAL_COUNT);
+                      const feedUrl = (slug: string) => `https://${slug}.substack.com/feed`;
+                      return (
+                        <>
+                          <div className="grid grid-cols-3 gap-1.5">
+                            {visible.map((item) => {
+                              const url = feedUrl(item.slug);
+                              const alreadyAdded = stack.substackFeeds.includes(url);
+                              return (
+                                <button
+                                  key={item.slug}
+                                  onClick={() => {
+                                    if (alreadyAdded) {
+                                      setStack((s) => ({ ...s, substackFeeds: s.substackFeeds.filter((f) => f !== url) }));
+                                    } else {
+                                      setStack((s) => ({ ...s, substackFeeds: [...s.substackFeeds, url] }));
+                                    }
+                                  }}
+                                  className={`flex flex-col gap-1.5 p-2 rounded-xl border text-left transition-colors cursor-pointer ${
+                                    alreadyAdded
+                                      ? "border-waffle-orange/40 bg-waffle-orange/5 hover:border-waffle-orange/60 hover:bg-waffle-orange/10"
+                                      : "border-waffle-brown/10 bg-white hover:border-waffle-orange/30 hover:bg-waffle-pale"
+                                  }`}
+                                  aria-label={alreadyAdded ? `Remove ${item.name}` : `Add ${item.name}`}
+                                >
+                                  <div className="flex items-center justify-between gap-1">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                      src={`https://www.google.com/s2/favicons?domain=${item.slug}.substack.com&sz=32`}
+                                      width={16}
+                                      height={16}
+                                      alt=""
+                                      className="rounded-sm flex-shrink-0"
+                                    />
+                                    <span
+                                      className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 transition-colors ${
+                                        alreadyAdded
+                                          ? "bg-waffle-orange/15 text-waffle-orange"
+                                          : "bg-waffle-brown/8 text-waffle-brown/40"
+                                      }`}
+                                    >
+                                      {alreadyAdded ? "✓" : "+"}
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] font-bold text-waffle-brown leading-tight truncate">{item.name}</p>
+                                  <p className="text-[10px] text-waffle-brown/45 leading-tight line-clamp-2">{item.description}</p>
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {filtered.length > CURATED_SUBSTACKS_INITIAL_COUNT && (
+                            <button
+                              onClick={() => setShowAllSubstacks((v) => !v)}
+                              className="w-full text-[11px] font-semibold text-waffle-brown/45 hover:text-waffle-orange transition-colors py-1.5 rounded-lg hover:bg-waffle-pale"
+                            >
+                              {showAllSubstacks ? "Show less" : `Show all ${filtered.length} newsletters`}
+                            </button>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
-                  {substackCheck === "invalid" && (
-                    <p className="text-xs text-red-500 px-0.5">
-                      No Substack found at {substackInput.trim().toLowerCase().replace(/^https?:\/\//, "").split(".")[0]}.substack.com
-                    </p>
-                  )}
+
+                  {/* Manual entry */}
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-bold text-waffle-brown/35 uppercase tracking-widest">Add your own</p>
+                    {stack.substackFeeds.map((url) => {
+                      const slug = url.match(/https?:\/\/([^.]+)\.substack\.com/)?.[1] ?? url;
+                      // Only show custom ones (not in the curated list)
+                      if (CURATED_SUBSTACKS.some((s) => s.slug === slug)) return null;
+                      return (
+                        <div
+                          key={url}
+                          className="flex items-center justify-between gap-1 text-xs text-waffle-brown/60 bg-waffle-pale rounded-lg px-2 py-1.5"
+                        >
+                          <span className="truncate font-medium">{slug}</span>
+                          <button
+                            onClick={() => setStack((s) => ({ ...s, substackFeeds: s.substackFeeds.filter((f) => f !== url) }))}
+                            className="text-waffle-brown/30 hover:text-red-500 transition-colors flex-shrink-0 leading-none"
+                            aria-label={`Remove ${slug}`}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      );
+                    })}
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        value={substackInput}
+                        onChange={(e) => {
+                          setSubstackInput(e.target.value);
+                          if (substackCheck === "invalid") setSubstackCheck("idle");
+                        }}
+                        onKeyDown={(e) => e.key === "Enter" && addSubstack()}
+                        disabled={substackCheck === "checking"}
+                        placeholder="e.g. paulgraham"
+                        className="flex-1 border-b border-waffle-brown/20 bg-transparent text-xs text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:border-waffle-orange py-1 disabled:opacity-50"
+                      />
+                      <button
+                        onClick={addSubstack}
+                        disabled={substackCheck === "checking"}
+                        className="text-xs font-semibold text-waffle-orange disabled:opacity-50"
+                      >
+                        {substackCheck === "checking" ? "Checking…" : "Add"}
+                      </button>
+                    </div>
+                    {substackCheck === "invalid" && (
+                      <p className="text-xs text-red-500 px-0.5">
+                        No Substack found at {substackInput.trim().toLowerCase().replace(/^https?:\/\//, "").split(".")[0]}.substack.com
+                      </p>
+                    )}
+                  </div>
+
                 </div>
               </NodeCard>
             </div>
@@ -1262,7 +1414,7 @@ export default function DashboardClient(props: Props) {
                     crypto: { icon: "₿", label: "Crypto" },
                     reddit: { icon: <img src="/icons/reddit.png" width={16} height={16} alt="Reddit" className="rounded-full" />, label: "Reddit" },
                     hacker_news: { icon: <img src="/icons/hacker-news.png" width={16} height={16} alt="Hacker News" className="rounded" />, label: "Hacker News" },
-                    rss: { icon: "📡", label: "RSS Feeds" },
+                    rss: { icon: <img src="/icons/rss_icon.png" width={16} height={16} alt="RSS" />, label: "RSS Feeds" },
                     substack: { icon: <img src="/icons/substack.png" width={16} height={16} alt="Substack" />, label: "Substack" },
                   };
                   const meta = sectionMeta[key];
