@@ -1065,7 +1065,7 @@ export default function DashboardClient(props: Props) {
                     setShowAllCuratedFeeds(false);
                   }
                 }}
-                icon="📡"
+                icon={<img src="/icons/rss_icon.png" width={16} height={16} alt="RSS" />}
                 label="RSS Feeds"
               >
                 {stack.rss && (
