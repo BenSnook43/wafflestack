@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
-export type BlockType = "weather" | "reddit" | "stocks" | "hacker_news" | "rss" | "substack" | "separator";
+export type BlockType = "weather" | "reddit" | "stocks" | "crypto" | "hacker_news" | "rss" | "substack" | "separator";
 
 export interface Block {
   id: string;
@@ -13,6 +13,7 @@ export interface Block {
     city?: string;
     subreddits?: string[];
     tickers?: string[];
+    coins?: string[];
     feeds?: string[];
   };
 }
@@ -32,6 +33,7 @@ type InspirationSource =
   | { type: "subreddit"; value: string; label: string }
   | { type: "hacker_news" }
   | { type: "ticker"; value: string; label: string }
+  | { type: "crypto"; value: string; label: string }
   | { type: "rss"; value: string; label: string }
   | { type: "weather" };
 
@@ -109,8 +111,9 @@ const INSPIRATION_PACKS: InspirationPack[] = [
     sources: [
       { type: "subreddit", value: "CryptoCurrency", label: "r/CryptoCurrency" },
       { type: "subreddit", value: "Bitcoin", label: "r/Bitcoin" },
-      { type: "ticker", value: "BTC-USD", label: "BTC — Bitcoin" },
-      { type: "ticker", value: "ETH-USD", label: "ETH — Ethereum" },
+      { type: "crypto", value: "BTC", label: "BTC — Bitcoin" },
+      { type: "crypto", value: "ETH", label: "ETH — Ethereum" },
+      { type: "crypto", value: "SOL", label: "SOL — Solana" },
       { type: "rss", value: "https://www.coindesk.com/arc/outboundfeeds/rss/", label: "CoinDesk" },
       { type: "rss", value: "https://cointelegraph.com/rss", label: "Cointelegraph" },
     ],
@@ -240,6 +243,7 @@ function sourceIcon(src: InspirationSource) {
     return <img src="/icons/reddit.png" width={20} height={20} alt="Reddit" className="rounded-full flex-shrink-0" />;
   }
   if (src.type === "ticker") return <TickerLogo symbol={src.value} size={20} />;
+  if (src.type === "crypto") return <span className="flex-shrink-0 text-sm font-bold">₿</span>;
   if (src.type === "rss") return <span className="flex-shrink-0">📡</span>;
   if (src.type === "weather") return <span className="flex-shrink-0">⛅</span>;
 }
@@ -271,11 +275,12 @@ function uid() {
 
 // ── Derive flat state from blocks array ─────────────────────────────────────
 
-const DEFAULT_SECTION_ORDER = ["weather", "stocks", "reddit", "hacker_news", "rss", "substack"];
+const DEFAULT_SECTION_ORDER = ["weather", "stocks", "crypto", "reddit", "hacker_news", "rss", "substack"];
 
 function blocksToState(blocks: Block[]) {
   const weather = blocks.find((b) => b.type === "weather");
   const stocks = blocks.find((b) => b.type === "stocks");
+  const crypto = blocks.find((b) => b.type === "crypto");
   const reddit = blocks.find((b) => b.type === "reddit");
   const rss = blocks.find((b) => b.type === "rss");
   const hackerNews = blocks.some((b) => b.type === "hacker_news");
@@ -295,6 +300,8 @@ function blocksToState(blocks: Block[]) {
     weatherCity: weather?.config.city ?? "",
     stocks: !!stocks,
     stockTickers: stocks?.config.tickers?.join(", ") ?? "",
+    crypto: !!crypto,
+    cryptoCoins: crypto?.config.coins?.join(", ") ?? "",
     subreddits: reddit?.config.subreddits ?? [],
     customSub: "",
     hackerNews,
@@ -312,6 +319,7 @@ function stateToSavePayload(state: StackState) {
   const sectionOrder = state.sectionOrder.filter((key) => {
     if (key === "weather") return state.weather;
     if (key === "stocks") return state.stocks;
+    if (key === "crypto") return state.crypto;
     if (key === "reddit") return state.subreddits.length > 0;
     if (key === "hacker_news") return state.hackerNews;
     if (key === "rss") return state.feeds.length > 0;
@@ -324,6 +332,9 @@ function stateToSavePayload(state: StackState) {
     subreddits: state.subreddits,
     stocks: state.stocks
       ? state.stockTickers.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean)
+      : [],
+    crypto: state.crypto
+      ? state.cryptoCoins.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean)
       : [],
     rss_feeds: [...state.feeds, ...state.substackFeeds],
     hacker_news: state.hackerNews,
@@ -342,6 +353,10 @@ function isInStack(src: InspirationSource, s: StackState): boolean {
     case "ticker": {
       const tickers = s.stockTickers.split(",").map((t) => t.trim().toUpperCase()).filter(Boolean);
       return tickers.includes(src.value.toUpperCase());
+    }
+    case "crypto": {
+      const coins = s.cryptoCoins.split(",").map((c) => c.trim().toUpperCase()).filter(Boolean);
+      return coins.includes(src.value.toUpperCase());
     }
     case "rss":
       return s.feeds.includes(src.value);
@@ -366,6 +381,7 @@ export default function DashboardClient(props: Props) {
   const [tickerError, setTickerError] = useState(false);
   const tickerDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tickerInputRef = useRef<HTMLInputElement>(null);
+  const [cryptoCoinInput, setCryptoCoinInput] = useState("");
   const dragKey = useRef<string | null>(null);
   const dragPosition = useRef<"before" | "after" | null>(null);
   const [dragOver, setDragOver] = useState<{ key: string; position: "before" | "after" } | null>(null);
@@ -502,6 +518,26 @@ export default function DashboardClient(props: Props) {
     });
   }
 
+  function addCoin(symbol: string) {
+    const upper = symbol.toUpperCase();
+    const existing = stack.cryptoCoins.split(",").map((c) => c.trim().toUpperCase()).filter(Boolean);
+    if (existing.includes(upper)) return;
+    setStack((s) => ({
+      ...s,
+      crypto: true,
+      cryptoCoins: [...existing, upper].join(", "),
+    }));
+  }
+
+  function removeCoin(symbol: string) {
+    const upper = symbol.toUpperCase();
+    setStack((s) => {
+      const remaining = s.cryptoCoins
+        .split(",").map((c) => c.trim().toUpperCase()).filter((c) => c && c !== upper);
+      return { ...s, cryptoCoins: remaining.join(", "), crypto: remaining.length > 0 };
+    });
+  }
+
   function handleDragStart(key: string) {
     dragKey.current = key;
   }
@@ -545,6 +581,7 @@ export default function DashboardClient(props: Props) {
       switch (key) {
         case "weather": return { ...s, weather: false, weatherCity: "" };
         case "stocks": return { ...s, stocks: false, stockTickers: "" };
+        case "crypto": return { ...s, crypto: false, cryptoCoins: "" };
         case "reddit": return { ...s, subreddits: [] };
         case "hacker_news": return { ...s, hackerNews: false };
         case "rss": return { ...s, rss: false, feeds: [] };
@@ -614,6 +651,13 @@ export default function DashboardClient(props: Props) {
           if (existing.includes(src.value.toUpperCase())) return s;
           return { ...s, stocks: true, stockTickers: [...existing, src.value.toUpperCase()].join(", ") };
         }
+        case "crypto": {
+          const existing = s.cryptoCoins
+            ? s.cryptoCoins.split(",").map((c) => c.trim().toUpperCase()).filter(Boolean)
+            : [];
+          if (existing.includes(src.value.toUpperCase())) return s;
+          return { ...s, crypto: true, cryptoCoins: [...existing, src.value.toUpperCase()].join(", ") };
+        }
         case "rss":
           if (s.feeds.includes(src.value)) return s;
           return { ...s, rss: true, feeds: [...s.feeds, src.value] };
@@ -624,12 +668,13 @@ export default function DashboardClient(props: Props) {
   }
 
   const hasAnyBlock =
-    stack.weather || stack.stocks || stack.subreddits.length > 0 || stack.hackerNews || stack.feeds.length > 0 || stack.substackFeeds.length > 0;
+    stack.weather || stack.stocks || stack.crypto || stack.subreddits.length > 0 || stack.hackerNews || stack.feeds.length > 0 || stack.substackFeeds.length > 0;
 
   // Active sections in user-defined order
   const activeSectionOrder = stack.sectionOrder.filter((key) => {
     if (key === "weather") return stack.weather;
     if (key === "stocks") return stack.stocks;
+    if (key === "crypto") return stack.crypto;
     if (key === "reddit") return stack.subreddits.length > 0;
     if (key === "hacker_news") return stack.hackerNews;
     if (key === "rss") return stack.rss && stack.feeds.length > 0;
@@ -809,6 +854,68 @@ export default function DashboardClient(props: Props) {
                         </ul>
                       )}
                     </div>
+                  </div>
+                )}
+              </NodeCard>
+
+              <NodeCard
+                active={stack.crypto}
+                onClick={() => setStack((s) => ({ ...s, crypto: !s.crypto }))}
+                icon="₿"
+                label="Crypto"
+              >
+                {stack.crypto && (
+                  <div className="mt-2 space-y-2" onClick={(e) => e.stopPropagation()}>
+                    {/* Coin chips */}
+                    {stack.cryptoCoins.split(",").map((c) => c.trim().toUpperCase()).filter(Boolean).length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {stack.cryptoCoins.split(",").map((c) => c.trim().toUpperCase()).filter(Boolean).map((coin) => (
+                          <span
+                            key={coin}
+                            className="flex items-center gap-1 bg-waffle-pale rounded-lg px-2 py-0.5 text-xs font-semibold text-waffle-brown"
+                          >
+                            <span className="text-[10px]">₿</span>
+                            {coin}
+                            <button
+                              type="button"
+                              onClick={() => removeCoin(coin)}
+                              className="ml-0.5 text-waffle-brown/40 hover:text-waffle-brown leading-none"
+                              aria-label={`Remove ${coin}`}
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {/* Coin input */}
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={cryptoCoinInput}
+                        onChange={(e) => setCryptoCoinInput(e.target.value.toUpperCase())}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === ",") {
+                            e.preventDefault();
+                            const sym = cryptoCoinInput.trim().replace(/,$/, "");
+                            if (sym) { addCoin(sym); setCryptoCoinInput(""); }
+                          }
+                        }}
+                        placeholder="Add coin (e.g. BTC, ETH, SOL)"
+                        className="flex-1 border-b border-waffle-brown/20 bg-transparent text-sm text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:border-waffle-orange py-1"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const sym = cryptoCoinInput.trim();
+                          if (sym) { addCoin(sym); setCryptoCoinInput(""); }
+                        }}
+                        className="text-xs font-semibold text-waffle-orange"
+                      >
+                        Add
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-waffle-brown/30">Enter symbol (BTC, ETH, SOL…) and press Enter or Add</p>
                   </div>
                 )}
               </NodeCard>
@@ -1082,7 +1189,7 @@ export default function DashboardClient(props: Props) {
                     setStack((s) => ({ ...s, substackFeeds: [] }));
                   }
                 }}
-                icon="📬"
+                icon={<img src="/icons/substack.png" width={16} height={16} alt="Substack" />}
                 label="Substack"
               >
                 <div className="mt-2 space-y-2" onClick={(e) => e.stopPropagation()}>
@@ -1152,10 +1259,11 @@ export default function DashboardClient(props: Props) {
                   const sectionMeta: Record<string, { icon: React.ReactNode; label: string }> = {
                     weather: { icon: "⛅", label: `Weather${stack.weatherCity ? ` — ${stack.weatherCity}` : ""}` },
                     stocks: { icon: "📈", label: "Stocks" },
+                    crypto: { icon: "₿", label: "Crypto" },
                     reddit: { icon: <img src="/icons/reddit.png" width={16} height={16} alt="Reddit" className="rounded-full" />, label: "Reddit" },
                     hacker_news: { icon: <img src="/icons/hacker-news.png" width={16} height={16} alt="Hacker News" className="rounded" />, label: "Hacker News" },
                     rss: { icon: "📡", label: "RSS Feeds" },
-                    substack: { icon: "📬", label: "Substack" },
+                    substack: { icon: <img src="/icons/substack.png" width={16} height={16} alt="Substack" />, label: "Substack" },
                   };
                   const meta = sectionMeta[key];
 
@@ -1163,6 +1271,11 @@ export default function DashboardClient(props: Props) {
                   if (key === "stocks") {
                     stack.stockTickers.split(",").map((t) => t.trim().toUpperCase()).filter(Boolean).forEach((ticker) => {
                       subItems.push({ key: ticker, label: ticker, onRemove: () => removeTicker(ticker) });
+                    });
+                  }
+                  if (key === "crypto") {
+                    stack.cryptoCoins.split(",").map((c) => c.trim().toUpperCase()).filter(Boolean).forEach((coin) => {
+                      subItems.push({ key: coin, label: coin, onRemove: () => removeCoin(coin) });
                     });
                   }
                   if (key === "reddit") {

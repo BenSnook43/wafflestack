@@ -8,6 +8,7 @@ function deriveBlocks(prefs: {
   location?: string | null;
   subreddits?: string[] | null;
   stocks?: string[] | null;
+  crypto?: string[] | null;
   rss_feeds?: string[] | null;
   hacker_news?: boolean | null;
   section_order?: string[] | null;
@@ -22,6 +23,9 @@ function deriveBlocks(prefs: {
   }
   if (prefs.stocks?.length) {
     available.stocks = { id: "s1", type: "stocks", config: { tickers: prefs.stocks } };
+  }
+  if (prefs.crypto?.length) {
+    available.crypto = { id: "c1", type: "crypto", config: { coins: prefs.crypto } };
   }
   if (prefs.rss_feeds?.length) {
     available.rss = { id: "rss1", type: "rss", config: { feeds: prefs.rss_feeds } };
@@ -107,7 +111,7 @@ export default async function DashboardPage({
 
   const { data: prefs } = await supabase
     .from("preferences")
-    .select("location, subreddits, stocks, rss_feeds, hacker_news, section_order")
+    .select("location, subreddits, stocks, crypto, rss_feeds, hacker_news, section_order")
     .eq("user_id", userRecord?.id)
     .single();
 
@@ -115,6 +119,7 @@ export default async function DashboardPage({
     location: prefs?.location,
     subreddits: prefs?.subreddits,
     stocks: prefs?.stocks,
+    crypto: prefs?.crypto,
     rss_feeds: prefs?.rss_feeds,
     hacker_news: prefs?.hacker_news,
     section_order: prefs?.section_order,

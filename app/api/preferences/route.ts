@@ -13,7 +13,7 @@ export async function PATCH(req: NextRequest) {
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ error: "Invalid request." }, { status: 400 });
 
-  const { location, subreddits, stocks, rss_feeds, hacker_news, section_order, active } = body;
+  const { location, subreddits, stocks, crypto, rss_feeds, hacker_news, section_order, active } = body;
 
   // Look up user record by email
   const { data: userRecord, error: userErr } = await supabase
@@ -42,6 +42,7 @@ export async function PATCH(req: NextRequest) {
   if (location !== undefined) updates.location = location;
   if (Array.isArray(subreddits)) updates.subreddits = subreddits;
   if (Array.isArray(stocks)) updates.stocks = stocks;
+  if (Array.isArray(crypto)) updates.crypto = crypto;
   if (Array.isArray(rss_feeds)) updates.rss_feeds = rss_feeds;
   if (typeof hacker_news === "boolean") updates.hacker_news = hacker_news;
   if (Array.isArray(section_order)) updates.section_order = section_order;

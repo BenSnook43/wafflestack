@@ -25,6 +25,7 @@ One n8n workflow runs on a daily cron. It fetches all active users from Supabase
 - Weather: OpenWeatherMap API
 - Reddit: Reddit API (cache per unique subreddit, not per user)
 - Stocks/markets: Alpha Vantage or Polygon.io free tier
+- Crypto: CoinMarketCap API (free tier) — env var `COINMARKETCAP_API_KEY`
 - Calendar: Google Calendar API (OAuth per user)
 - Gmail: Gmail API (OAuth per user)
 
@@ -40,7 +41,8 @@ Webhook payload shape:
   "location": "London",
   "subreddits": ["technology", "investing"],
   "stocks": ["AAPL", "TSLA"],
-  "connectors": ["weather", "reddit", "stocks"]
+  "crypto": ["BTC", "ETH"],
+  "connectors": ["weather", "reddit", "stocks", "crypto"]
 }
 ```
 
@@ -62,7 +64,7 @@ Webhook payload shape:
 
 ## Preferences storage
 
-Each connector (weather, reddit, stocks, rss, hacker_news) gets its own top-level column in the `preferences` table. n8n checks whether a column is null/empty to decide what to fetch — no JSONB parsing needed in the workflow.
+Each connector (weather, reddit, stocks, crypto, rss, hacker_news) gets its own top-level column in the `preferences` table. n8n checks whether a column is null/empty to decide what to fetch — no JSONB parsing needed in the workflow.
 
 `section_order text[]` is a separate column that controls what order sections appear in the email. It's advisory — if a connector column is empty, n8n skips it regardless of whether it appears in `section_order`.
 

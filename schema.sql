@@ -37,6 +37,7 @@ create table public.preferences (
   stocks        text[] default '{}',
   rss_feeds     text[] default '{}',
   hacker_news   boolean not null default false,
+  crypto        text[] default '{}',
   section_order text[] default '{}',
   settings      jsonb not null default '{}',
   updated_at    timestamptz not null default now()
