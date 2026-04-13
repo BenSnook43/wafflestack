@@ -220,6 +220,8 @@ interface CuratedSubstack {
   name: string;
   description: string;
   category: string;
+  feedUrl?: string;      // override for custom-domain Substacks
+  faviconDomain?: string; // override favicon domain when slug.substack.com is wrong
 }
 
 const CURATED_SUBSTACKS: CuratedSubstack[] = [
@@ -231,14 +233,20 @@ const CURATED_SUBSTACKS: CuratedSubstack[] = [
   { slug: "therundownai",       name: "The Rundown AI",          description: "Daily AI news and tools in 5 minutes",               category: "AI" },
   { slug: "importai",           name: "Import AI",               description: "AI research analysis from Jack Clark",               category: "AI" },
   { slug: "theneurondaily",     name: "The Neuron",              description: "Practical AI tools and use cases, daily",            category: "AI" },
+  // Tech (cont.)
+  { slug: "semianalysis",       name: "SemiAnalysis",            description: "Deep-dive semiconductor and AI chip industry analysis", category: "Tech" },
   // Startups
   { slug: "lennysnewsletter",   name: "Lenny's Newsletter",      description: "Product, growth, and career advice for builders",    category: "Startups" },
   { slug: "notboring",          name: "Not Boring",              description: "Business strategy and company deep-dives",           category: "Startups" },
   { slug: "mostlymetrics",      name: "Mostly Metrics",          description: "SaaS metrics, benchmarks, and growth insights",     category: "Startups" },
+  { slug: "profgalloway",       name: "No Mercy / No Malice",    description: "Scott Galloway on business, tech, and society",     category: "Startups" },
+  { slug: "a16z",               name: "a16z",                    description: "Tech and startup insights from Andreessen Horowitz", category: "Startups", feedUrl: "https://www.a16z.news/feed", faviconDomain: "a16z.news" },
   // Finance
   { slug: "thediff",            name: "The Diff",                description: "Finance and tech trends for long-term thinkers",    category: "Finance" },
   { slug: "netinterest",        name: "Net Interest",            description: "Deep dives into fintech and financial services",     category: "Finance" },
   { slug: "doomberg",           name: "Doomberg",                description: "Energy markets and macro through a contrarian lens", category: "Finance" },
+  { slug: "chamath",            name: "Chamath Palihapitiya",    description: "Macro investing, tech, and VC perspectives",        category: "Finance" },
+  { slug: "raydalio",           name: "Ray Dalio",               description: "Macro economics and principles from Ray Dalio",     category: "Finance" },
   // Ideas
   { slug: "astralcodexten",     name: "Astral Codex Ten",        description: "Rationalism, psychiatry, and big ideas",            category: "Ideas" },
   { slug: "worksinprogress",    name: "Works in Progress",       description: "Long-form pieces on progress and innovation",       category: "Ideas" },
@@ -1276,12 +1284,12 @@ export default function DashboardClient(props: Props) {
                       const visible = showAllSubstacks
                         ? filtered
                         : filtered.slice(0, CURATED_SUBSTACKS_INITIAL_COUNT);
-                      const feedUrl = (slug: string) => `https://${slug}.substack.com/feed`;
+                      const defaultFeedUrl = (slug: string) => `https://${slug}.substack.com/feed`;
                       return (
                         <>
                           <div className="grid grid-cols-3 gap-1.5">
                             {visible.map((item) => {
-                              const url = feedUrl(item.slug);
+                              const url = item.feedUrl ?? defaultFeedUrl(item.slug);
                               const alreadyAdded = stack.substackFeeds.includes(url);
                               return (
                                 <button
@@ -1303,7 +1311,7 @@ export default function DashboardClient(props: Props) {
                                   <div className="flex items-center justify-between gap-1">
                                     {/* eslint-disable-next-line @next/next/no-img-element */}
                                     <img
-                                      src={`https://www.google.com/s2/favicons?domain=${item.slug}.substack.com&sz=32`}
+                                      src={`https://www.google.com/s2/favicons?domain=${item.faviconDomain ?? `${item.slug}.substack.com`}&sz=32`}
                                       width={16}
                                       height={16}
                                       alt=""
@@ -1344,7 +1352,10 @@ export default function DashboardClient(props: Props) {
                     {stack.substackFeeds.map((url) => {
                       const slug = url.match(/https?:\/\/([^.]+)\.substack\.com/)?.[1] ?? url;
                       // Only show custom ones (not in the curated list)
-                      if (CURATED_SUBSTACKS.some((s) => s.slug === slug)) return null;
+                      const isCurated = CURATED_SUBSTACKS.some(
+                        (s) => s.feedUrl === url || s.slug === slug
+                      );
+                      if (isCurated) return null;
                       return (
                         <div
                           key={url}
