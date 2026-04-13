@@ -60,7 +60,7 @@ export default async function DashboardPage({
 
   const { data: userRecord } = await supabase
     .from("users")
-    .select("id, email, active, trial_ends_at, subscription_status, emails_sent, stripe_customer_id, stripe_subscription_id")
+    .select("id, email, trial_ends_at, subscription_status, emails_sent, stripe_customer_id, stripe_subscription_id")
     .eq("email", user.email!)
     .single();
 
@@ -124,7 +124,6 @@ export default async function DashboardPage({
     <DashboardClient
       email={user.email!}
       userId={userRecord?.id ?? ""}
-      active={userRecord?.active ?? true}
       blocks={blocks}
       trialEndsAt={userRecord?.trial_ends_at ?? null}
       subscriptionStatus={userRecord?.subscription_status ?? "trialing"}

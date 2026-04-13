@@ -20,7 +20,6 @@ export interface Block {
 interface Props {
   email: string;
   userId: string;
-  active: boolean;
   blocks: Block[];
   trialEndsAt: string | null;
   subscriptionStatus: string;
@@ -355,7 +354,6 @@ function isInStack(src: InspirationSource, s: StackState): boolean {
 
 export default function DashboardClient(props: Props) {
   const [stack, setStack] = useState<StackState>(() => blocksToState(props.blocks));
-  const [active, setActive] = useState(props.active);
   const [saveStatus, setSaveStatus] = useState<"idle" | "loading" | "saved" | "error">("idle");
   const [subCheck, setSubCheck] = useState<"idle" | "checking" | "invalid">("idle");
   const [substackInput, setSubstackInput] = useState("");
@@ -654,20 +652,6 @@ export default function DashboardClient(props: Props) {
     }
   }
 
-  async function handleTogglePause() {
-    const next = !active;
-    const res = await fetch("/api/preferences", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ active: next }),
-    });
-    if (res.ok) setActive(next);
-  }
-
-  async function handleSignOut() {
-    await fetch("/api/auth/sign-out", { method: "POST" });
-    window.location.href = "/";
-  }
 
   const badge = subscriptionBadge(props.subscriptionStatus, props.trialEndsAt);
 
@@ -706,42 +690,11 @@ export default function DashboardClient(props: Props) {
             </div>
           </div>
           <div className="flex items-center gap-4">
-            {/* Inspiration toggle */}
             <button
               onClick={() => setInspiredOpen(true)}
               className="flex items-center gap-1.5 text-xs font-semibold text-waffle-brown/50 hover:text-waffle-brown border border-waffle-brown/15 hover:border-waffle-brown/40 px-3 py-1.5 rounded-full transition-colors"
             >
               <span>✨</span> Get Inspired
-            </button>
-            {/* Pause toggle */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-waffle-brown/50">
-                {active ? "Active" : "Paused"}
-              </span>
-              <button
-                onClick={handleTogglePause}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
-                  active ? "bg-waffle-orange" : "bg-waffle-brown/20"
-                }`}
-              >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                    active ? "translate-x-6" : "translate-x-1"
-                  }`}
-                />
-              </button>
-            </div>
-            <a
-              href="/settings"
-              className="text-xs text-waffle-brown/40 hover:text-waffle-brown transition-colors font-semibold"
-            >
-              Settings
-            </a>
-            <button
-              onClick={handleSignOut}
-              className="text-xs text-waffle-brown/40 hover:text-waffle-brown transition-colors font-semibold"
-            >
-              Sign out
             </button>
           </div>
         </div>
@@ -1064,9 +1017,21 @@ export default function DashboardClient(props: Props) {
                               {visible.map((feed) => {
                                 const alreadyAdded = stack.feeds.includes(feed.url);
                                 return (
-                                  <div
+                                  <button
                                     key={feed.url}
-                                    className="flex flex-col gap-1.5 p-2 rounded-xl border border-waffle-brown/10 bg-white hover:border-waffle-brown/20 transition-colors"
+                                    onClick={() => {
+                                      if (alreadyAdded) {
+                                        setStack((s) => ({ ...s, feeds: s.feeds.filter((f) => f !== feed.url) }));
+                                      } else {
+                                        addFeedUrl(feed.url);
+                                      }
+                                    }}
+                                    className={`flex flex-col gap-1.5 p-2 rounded-xl border text-left transition-colors cursor-pointer ${
+                                      alreadyAdded
+                                        ? "border-waffle-orange/40 bg-waffle-orange/5 hover:border-waffle-orange/60 hover:bg-waffle-orange/10"
+                                        : "border-waffle-brown/10 bg-white hover:border-waffle-orange/30 hover:bg-waffle-pale"
+                                    }`}
+                                    aria-label={alreadyAdded ? `Remove ${feed.name}` : `Add ${feed.name}`}
                                   >
                                     <div className="flex items-center justify-between gap-1">
                                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1077,22 +1042,19 @@ export default function DashboardClient(props: Props) {
                                         alt=""
                                         className="rounded-sm flex-shrink-0"
                                       />
-                                      <button
-                                        onClick={() => !alreadyAdded && addFeedUrl(feed.url)}
-                                        disabled={alreadyAdded}
+                                      <span
                                         className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 transition-colors ${
                                           alreadyAdded
-                                            ? "bg-waffle-orange/15 text-waffle-orange cursor-default"
-                                            : "bg-waffle-brown/8 hover:bg-waffle-orange hover:text-white text-waffle-brown/40"
+                                            ? "bg-waffle-orange/15 text-waffle-orange"
+                                            : "bg-waffle-brown/8 text-waffle-brown/40 group-hover:bg-waffle-orange group-hover:text-white"
                                         }`}
-                                        aria-label={alreadyAdded ? `${feed.name} added` : `Add ${feed.name}`}
                                       >
                                         {alreadyAdded ? "✓" : "+"}
-                                      </button>
+                                      </span>
                                     </div>
                                     <p className="text-[11px] font-bold text-waffle-brown leading-tight truncate">{feed.name}</p>
                                     <p className="text-[10px] text-waffle-brown/45 leading-tight line-clamp-2">{feed.description}</p>
-                                  </div>
+                                  </button>
                                 );
                               })}
                             </div>
