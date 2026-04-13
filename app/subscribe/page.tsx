@@ -90,8 +90,8 @@ export default function SubscribePage() {
           </Link>
           <button
             onClick={async () => {
-              await fetch("/api/auth/sign-out", { method: "POST" });
-              window.location.href = "/";
+              const res = await fetch("/api/auth/sign-out", { method: "POST", redirect: "follow" });
+              window.location.href = res.url || "/";
             }}
             className="hover:text-waffle-brown transition-colors"
           >

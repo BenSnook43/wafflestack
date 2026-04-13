@@ -2,8 +2,8 @@
 
 export default function SignOutButton() {
   async function handleSignOut() {
-    await fetch("/api/auth/sign-out", { method: "POST" });
-    window.location.href = "/";
+    const res = await fetch("/api/auth/sign-out", { method: "POST", redirect: "follow" });
+    window.location.href = res.url || "/";
   }
 
   return (
