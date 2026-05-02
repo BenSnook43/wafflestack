@@ -74,6 +74,14 @@ Each connector (weather, reddit, stocks, crypto, rss, hacker_news) gets its own 
 
 **Rule of thumb:** if n8n reads it on every run, it gets a column. If only the frontend cares, JSONB is fine.
 
+## Product positioning
+
+**WaffleStack is a synthesizer, not a compiler.** The value proposition is not aggregating headlines — that's a crowded space. The value is synthesis: a coherent, readable digest built around the user's specific life (their stocks, their subreddits, their calendar). Compilation is the plumbing; synthesis is the product.
+
+**The voice belongs to WaffleStack, not to the LLM.** Claude is the engine. WaffleStack is the author. Users should experience a consistent WaffleStack brand voice, not variable AI personality. This means the system prompt must enforce tone explicitly — what to avoid, how to handle sensitive topics, what "witty but not glib" means in practice. Inconsistent AI personality leaking through at scale is a prompt discipline problem, not a product positioning problem.
+
+**Source counts are capped per connector.** Uncapped sources degrade synthesis quality (everything gets skimmed so lightly it's useless), push email length past the ~5-min read target, and let heavy users erode per-user margins. Caps also force users to curate intentionally, which produces better signal. Specific cap values are a product decision to be iterated on — do not hardcode them.
+
 ## Key decisions
 
 - **Use Haiku not Sonnet** — quality is sufficient for summarisation, 3x cheaper

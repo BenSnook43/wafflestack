@@ -826,42 +826,40 @@ export default function DashboardClient(props: Props) {
             </p>
           </div>
 
-          {/* Live Vitals */}
-          <section className="space-y-3">
-            <h3 className="text-xs font-bold text-waffle-brown/40 uppercase tracking-widest flex items-center gap-2">
-              <span>📡</span> Live Vitals
-            </h3>
-            <div className="space-y-3">
-              <NodeCard
-                active={stack.weather}
-                onClick={() => setStack((s) => ({ ...s, weather: !s.weather }))}
-                icon="⛅"
-                label="Weather"
-              >
-                {stack.weather && (
-                  <input
-                    type="text"
-                    value={stack.weatherCity}
-                    onChange={(e) => setStack((s) => ({ ...s, weatherCity: e.target.value }))}
-                    onClick={(e) => e.stopPropagation()}
-                    placeholder="Enter city…"
-                    className="mt-2 w-full border-b border-waffle-brown/20 bg-transparent text-sm text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:border-waffle-orange py-1"
-                  />
-                )}
-              </NodeCard>
+          {/* Compact sources */}
+          <section className="grid sm:grid-cols-2 gap-3 items-start">
+            <NodeCard
+              active={stack.weather}
+              onClick={() => setStack((s) => ({ ...s, weather: !s.weather }))}
+              icon="⛅"
+              label="Weather"
+              compact
+            >
+              {stack.weather && (
+                <input
+                  type="text"
+                  value={stack.weatherCity}
+                  onChange={(e) => setStack((s) => ({ ...s, weatherCity: e.target.value }))}
+                  onClick={(e) => e.stopPropagation()}
+                  placeholder="Enter city…"
+                  className="mt-2 w-full border-b border-waffle-brown/20 bg-transparent text-sm text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:border-waffle-orange py-1"
+                />
+              )}
+            </NodeCard>
 
-              <NodeCard
-                active={stack.stocks}
-                onClick={() => {
-                  const next = !stack.stocks;
-                  setStack((s) => ({ ...s, stocks: next }));
-                  if (next) setTimeout(() => tickerInputRef.current?.focus(), 50);
-                }}
-                icon="📈"
-                label="Stock Ticker"
-              >
-                {stack.stocks && (
-                  <div className="mt-2 space-y-2" onClick={(e) => e.stopPropagation()}>
+            <NodeCard
+              active={stack.stocks}
+              onClick={() => {
+                const next = !stack.stocks;
+                setStack((s) => ({ ...s, stocks: next }));
+                if (next) setTimeout(() => tickerInputRef.current?.focus(), 50);
+              }}
+              icon="📈"
+              label="Stock Ticker"
+              compact
+            >
+              {stack.stocks && (
+                <div className="mt-2 space-y-2" onClick={(e) => e.stopPropagation()}>
                     {/* Ticker chips */}
                     {stack.stockTickers.split(",").map((t) => t.trim().toUpperCase()).filter(Boolean).length > 0 && (
                       <div className="flex flex-wrap gap-1.5">
@@ -922,18 +920,19 @@ export default function DashboardClient(props: Props) {
                         </ul>
                       )}
                     </div>
-                  </div>
-                )}
-              </NodeCard>
+                </div>
+              )}
+            </NodeCard>
 
-              <NodeCard
-                active={stack.crypto}
-                onClick={() => setStack((s) => ({ ...s, crypto: !s.crypto }))}
-                icon="₿"
-                label="Crypto"
-              >
-                {stack.crypto && (
-                  <div className="mt-2 space-y-2" onClick={(e) => e.stopPropagation()}>
+            <NodeCard
+              active={stack.crypto}
+              onClick={() => setStack((s) => ({ ...s, crypto: !s.crypto }))}
+              icon="₿"
+              label="Crypto"
+              compact
+            >
+              {stack.crypto && (
+                <div className="mt-2 space-y-2" onClick={(e) => e.stopPropagation()}>
                     {/* Coin chips */}
                     {stack.cryptoCoins.split(",").map((c) => c.trim().toUpperCase()).filter(Boolean).length > 0 && (
                       <div className="flex flex-wrap gap-1.5">
@@ -984,10 +983,17 @@ export default function DashboardClient(props: Props) {
                       </button>
                     </div>
                     <p className="text-[10px] text-waffle-brown/30">Enter symbol (BTC, ETH, SOL…) and press Enter or Add</p>
-                  </div>
-                )}
-              </NodeCard>
-            </div>
+                </div>
+              )}
+            </NodeCard>
+
+            <NodeCard
+              active={stack.hackerNews}
+              onClick={() => setStack((s) => ({ ...s, hackerNews: !s.hackerNews }))}
+              icon={<img src="/icons/hacker-news.png" width={20} height={20} alt="Hacker News" className="rounded" />}
+              label="Hacker News"
+              compact
+            />
           </section>
 
           {/* Reddit Nodes */}
@@ -1051,19 +1057,9 @@ export default function DashboardClient(props: Props) {
             </div>
           </section>
 
-          {/* The Deep End */}
+          {/* Full-width sources */}
           <section className="space-y-3">
-            <h3 className="text-xs font-bold text-waffle-brown/40 uppercase tracking-widest flex items-center gap-2">
-              <span>🖥</span> The Deep End
-            </h3>
-            <div className="space-y-3">
-              <NodeCard
-                active={stack.hackerNews}
-                onClick={() => setStack((s) => ({ ...s, hackerNews: !s.hackerNews }))}
-                icon={<img src="/icons/hacker-news.png" width={28} height={28} alt="Hacker News" className="rounded" />}
-                label="Hacker News"
-              />
-              <NodeCard
+            <NodeCard
                 active={stack.rss}
                 onClick={() => {
                   const wasOn = stack.rss;
@@ -1073,7 +1069,7 @@ export default function DashboardClient(props: Props) {
                     setShowAllCuratedFeeds(false);
                   }
                 }}
-                icon={<img src="/icons/rss_icon.png" width={16} height={16} alt="RSS" />}
+                icon={<img src="/icons/rss_icon.png" width={20} height={20} alt="RSS" />}
                 label="RSS Feeds"
               >
                 {stack.rss && (
@@ -1248,7 +1244,7 @@ export default function DashboardClient(props: Props) {
 
                   </div>
                 )}
-              </NodeCard>
+            </NodeCard>
 
               <NodeCard
                 active={stack.substackFeeds.length > 0}
@@ -1257,7 +1253,7 @@ export default function DashboardClient(props: Props) {
                     setStack((s) => ({ ...s, substackFeeds: [] }));
                   }
                 }}
-                icon={<img src="/icons/substack.png" width={16} height={16} alt="Substack" />}
+                icon={<img src="/icons/substack.png" width={20} height={20} alt="Substack" />}
                 label="Substack"
               >
                 <div className="mt-2 space-y-3" onClick={(e) => e.stopPropagation()}>
@@ -1410,7 +1406,6 @@ export default function DashboardClient(props: Props) {
 
                 </div>
               </NodeCard>
-            </div>
           </section>
         </div>
 
@@ -1712,29 +1707,15 @@ function NodeCard({
           : "border-waffle-brown/10 bg-white hover:border-waffle-orange/40"
       }`}
     >
-      {compact ? (
-        <div className="flex items-center gap-2">
-          <span className="leading-none flex-shrink-0 flex items-center">{icon}</span>
-          <p className="flex-1 font-bold text-waffle-brown text-sm truncate">{label}</p>
-          {active && (
-            <span className="w-5 h-5 rounded-full bg-waffle-orange flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
-              ✓
-            </span>
-          )}
-        </div>
-      ) : (
-        <>
-          <div className="flex items-start justify-between mb-2">
-            <span className="text-2xl leading-none">{icon}</span>
-            {active && (
-              <span className="w-5 h-5 rounded-full bg-waffle-orange flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
-                ✓
-              </span>
-            )}
-          </div>
-          <p className="font-bold text-waffle-brown text-sm">{label}</p>
-        </>
-      )}
+      <div className="flex items-center gap-2">
+        <span className={`leading-none flex-shrink-0 flex items-center ${!compact ? "text-xl" : ""}`}>{icon}</span>
+        <p className="flex-1 font-bold text-waffle-brown text-sm truncate">{label}</p>
+        {active && (
+          <span className="w-5 h-5 rounded-full bg-waffle-orange flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+            ✓
+          </span>
+        )}
+      </div>
       {children}
     </div>
   );
