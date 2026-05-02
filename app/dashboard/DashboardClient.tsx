@@ -827,7 +827,7 @@ export default function DashboardClient(props: Props) {
           </div>
 
           {/* Compact sources */}
-          <section className="grid sm:grid-cols-2 gap-3 items-start">
+          <section className="grid sm:grid-cols-2 gap-3 items-stretch">
             <NodeCard
               active={stack.weather}
               onClick={() => setStack((s) => ({ ...s, weather: !s.weather }))}
@@ -1699,7 +1699,7 @@ function NodeCard({
   return (
     <div
       onClick={onClick}
-      className={`rounded-2xl border-2 cursor-pointer transition-all select-none ${
+      className={`h-full rounded-2xl border-2 cursor-pointer transition-all select-none ${
         compact ? "p-3" : "p-4"
       } ${
         active
