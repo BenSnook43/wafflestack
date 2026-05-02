@@ -239,7 +239,7 @@ const CURATED_SUBSTACKS: CuratedSubstack[] = [
   { slug: "lennysnewsletter",   name: "Lenny's Newsletter",      description: "Product, growth, and career advice for builders",    category: "Startups" },
   { slug: "notboring",          name: "Not Boring",              description: "Business strategy and company deep-dives",           category: "Startups" },
   { slug: "mostlymetrics",      name: "Mostly Metrics",          description: "SaaS metrics, benchmarks, and growth insights",     category: "Startups" },
-  { slug: "profgalloway",       name: "No Mercy / No Malice",    description: "Scott Galloway on business, tech, and society",     category: "Startups" },
+  { slug: "profgalloway",       name: "No Mercy / No Malice",    description: "Scott Galloway on business, tech, and society",     category: "Startups", feedUrl: "https://www.profgmedia.com/feed", faviconDomain: "profgmedia.com" },
   { slug: "a16z",               name: "a16z",                    description: "Tech and startup insights from Andreessen Horowitz", category: "Startups", feedUrl: "https://www.a16z.news/feed", faviconDomain: "a16z.news" },
   // Finance
   { slug: "thediff",            name: "The Diff",                description: "Finance and tech trends for long-term thinkers",    category: "Finance" },
@@ -270,6 +270,14 @@ const SUBSTACK_CATEGORY_EMOJI: Record<string, string> = {
 };
 
 const CURATED_SUBSTACKS_INITIAL_COUNT = 6;
+
+const CURATED_SUBSTACK_FEED_URLS = new Set(
+  CURATED_SUBSTACKS.map((item) => item.feedUrl ?? `https://${item.slug}.substack.com/feed`)
+);
+
+function isSubstackFeedUrl(url: string) {
+  return url.includes(".substack.com") || CURATED_SUBSTACK_FEED_URLS.has(url);
+}
 
 // ── Brandfetch logo component ────────────────────────────────────────────────
 
@@ -345,8 +353,8 @@ function blocksToState(blocks: Block[]) {
 
   // Split rss_feeds into Substack vs generic by URL pattern
   const allFeeds = rss?.config.feeds ?? [];
-  const substackFeeds = allFeeds.filter((url) => url.includes(".substack.com"));
-  const genericFeeds = allFeeds.filter((url) => !url.includes(".substack.com"));
+  const substackFeeds = allFeeds.filter(isSubstackFeedUrl);
+  const genericFeeds = allFeeds.filter((url) => !isSubstackFeedUrl(url));
 
   // Derive order from blocks (which already respect DB section_order), then append missing
   const fromBlocks = blocks.map((b) => b.type).filter((t) => DEFAULT_SECTION_ORDER.includes(t as string));
