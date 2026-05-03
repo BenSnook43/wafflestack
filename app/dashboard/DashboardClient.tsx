@@ -66,7 +66,7 @@ const INSPIRATION_PACKS: InspirationPack[] = [
       { type: "subreddit", value: "investing", label: "r/investing" },
       { type: "subreddit", value: "stocks", label: "r/stocks" },
       { type: "rss", value: "https://feeds.marketwatch.com/marketwatch/topstories/", label: "MarketWatch" },
-      { type: "rss", value: "https://feeds.finance.yahoo.com/rss/2.0/headline?s=&region=US&lang=en-US", label: "Yahoo Finance" },
+      { type: "rss", value: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664", label: "CNBC Finance" },
     ],
   },
   {
@@ -162,7 +162,7 @@ const CURATED_FEEDS: CuratedFeed[] = [
   { name: "TechCrunch",         url: "https://techcrunch.com/feed/",                                                                       domain: "techcrunch.com",       description: "Startup and tech industry news",               category: "Tech" },
   // Investing
   { name: "MarketWatch",        url: "https://feeds.marketwatch.com/marketwatch/topstories/",                                              domain: "marketwatch.com",      description: "Top financial stories and market data",        category: "Investing" },
-  { name: "Yahoo Finance",       url: "https://feeds.finance.yahoo.com/rss/2.0/headline?s=&region=US&lang=en-US",                         domain: "finance.yahoo.com",    description: "Top financial headlines from Yahoo Finance",   category: "Investing" },
+  { name: "CNBC Finance",        url: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664",           domain: "cnbc.com",             description: "Top financial news and market analysis",       category: "Investing" },
   { name: "Seeking Alpha",      url: "https://seekingalpha.com/market_currents.xml",                                                       domain: "seekingalpha.com",     description: "Stock market analysis and commentary",         category: "Investing" },
   { name: "The Motley Fool",    url: "https://www.fool.com/feeds/index.aspx",                                                              domain: "fool.com",             description: "Stock picks and investing advice",             category: "Investing" },
   // World News
