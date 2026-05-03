@@ -66,7 +66,7 @@ const INSPIRATION_PACKS: InspirationPack[] = [
       { type: "subreddit", value: "investing", label: "r/investing" },
       { type: "subreddit", value: "stocks", label: "r/stocks" },
       { type: "rss", value: "https://feeds.marketwatch.com/marketwatch/topstories/", label: "MarketWatch" },
-      { type: "rss", value: "https://www.investopedia.com/feedbuilder/feed/getfeed/?feedName=rss_headline", label: "Investopedia" },
+      { type: "rss", value: "https://feeds.finance.yahoo.com/rss/2.0/headline?s=&region=US&lang=en-US", label: "Yahoo Finance" },
     ],
   },
   {
@@ -76,7 +76,7 @@ const INSPIRATION_PACKS: InspirationPack[] = [
       { type: "subreddit", value: "worldnews", label: "r/worldnews" },
       { type: "subreddit", value: "geopolitics", label: "r/geopolitics" },
       { type: "rss", value: "https://feeds.bbci.co.uk/news/rss.xml", label: "BBC News" },
-      { type: "rss", value: "https://feeds.reuters.com/reuters/topNews", label: "Reuters" },
+      { type: "rss", value: "https://feeds.npr.org/1001/rss.xml", label: "NPR News" },
       { type: "rss", value: "https://www.theguardian.com/world/rss", label: "The Guardian" },
       { type: "rss", value: "https://www.aljazeera.com/xml/rss/all.xml", label: "Al Jazeera" },
     ],
@@ -126,8 +126,8 @@ const INSPIRATION_PACKS: InspirationPack[] = [
       { type: "subreddit", value: "nutrition", label: "r/nutrition" },
       { type: "subreddit", value: "running", label: "r/running" },
       { type: "rss", value: "https://examine.com/feed/", label: "Examine.com" },
-      { type: "rss", value: "https://www.healthline.com/rss/news", label: "Healthline" },
-      { type: "rss", value: "https://www.nhs.uk/news/feed/", label: "NHS News" },
+      { type: "rss", value: "https://newsnetwork.mayoclinic.org/feed/", label: "Mayo Clinic" },
+      { type: "rss", value: "https://www.who.int/rss-feeds/news-english.xml", label: "WHO News" },
     ],
   },
   {
@@ -162,12 +162,12 @@ const CURATED_FEEDS: CuratedFeed[] = [
   { name: "TechCrunch",         url: "https://techcrunch.com/feed/",                                                                       domain: "techcrunch.com",       description: "Startup and tech industry news",               category: "Tech" },
   // Investing
   { name: "MarketWatch",        url: "https://feeds.marketwatch.com/marketwatch/topstories/",                                              domain: "marketwatch.com",      description: "Top financial stories and market data",        category: "Investing" },
-  { name: "Investopedia",       url: "https://www.investopedia.com/feedbuilder/feed/getfeed/?feedName=rss_headline",                       domain: "investopedia.com",     description: "Finance education and market insights",        category: "Investing" },
+  { name: "Yahoo Finance",       url: "https://feeds.finance.yahoo.com/rss/2.0/headline?s=&region=US&lang=en-US",                         domain: "finance.yahoo.com",    description: "Top financial headlines from Yahoo Finance",   category: "Investing" },
   { name: "Seeking Alpha",      url: "https://seekingalpha.com/market_currents.xml",                                                       domain: "seekingalpha.com",     description: "Stock market analysis and commentary",         category: "Investing" },
   { name: "The Motley Fool",    url: "https://www.fool.com/feeds/index.aspx",                                                              domain: "fool.com",             description: "Stock picks and investing advice",             category: "Investing" },
   // World News
   { name: "BBC News",           url: "https://feeds.bbci.co.uk/news/rss.xml",                                                             domain: "bbc.co.uk",            description: "Top stories from BBC News",                    category: "World News" },
-  { name: "Reuters",            url: "https://feeds.reuters.com/reuters/topNews",                                                          domain: "reuters.com",          description: "Breaking news from around the world",          category: "World News" },
+  { name: "NPR News",            url: "https://feeds.npr.org/1001/rss.xml",                                                                 domain: "npr.org",              description: "Breaking news from around the world",          category: "World News" },
   { name: "The Guardian",       url: "https://www.theguardian.com/world/rss",                                                              domain: "theguardian.com",      description: "World news from The Guardian",                 category: "World News" },
   { name: "Al Jazeera",         url: "https://www.aljazeera.com/xml/rss/all.xml",                                                          domain: "aljazeera.com",        description: "News from a global perspective",               category: "World News" },
   // Design
@@ -187,8 +187,8 @@ const CURATED_FEEDS: CuratedFeed[] = [
   { name: "The Block",          url: "https://www.theblock.co/rss.xml",                                                                    domain: "theblock.co",          description: "Institutional crypto research and news",       category: "Crypto" },
   // Health
   { name: "Examine.com",        url: "https://examine.com/feed/",                                                                          domain: "examine.com",          description: "Evidence-based nutrition and supplement info", category: "Health" },
-  { name: "Healthline",         url: "https://www.healthline.com/rss/news",                                                                domain: "healthline.com",       description: "Medical news and wellness tips",               category: "Health" },
-  { name: "NHS News",           url: "https://www.nhs.uk/news/feed/",                                                                      domain: "nhs.uk",               description: "Health news from the UK's NHS",               category: "Health" },
+  { name: "Mayo Clinic",         url: "https://newsnetwork.mayoclinic.org/feed/",                                                            domain: "mayoclinic.org",       description: "Health news from Mayo Clinic experts",         category: "Health" },
+  { name: "WHO News",            url: "https://www.who.int/rss-feeds/news-english.xml",                                                    domain: "who.int",              description: "Global health news from the WHO",              category: "Health" },
   { name: "MedPage Today",      url: "https://www.medpagetoday.com/rss/headlines.xml",                                                     domain: "medpagetoday.com",     description: "Medical news for healthcare professionals",    category: "Health" },
   // Gaming
   { name: "Rock Paper Shotgun", url: "https://www.rockpapershotgun.com/feed/",                                                             domain: "rockpapershotgun.com", description: "PC gaming news and reviews",                   category: "Gaming" },
@@ -200,6 +200,19 @@ const CURATED_FEEDS: CuratedFeed[] = [
 const CURATED_CATEGORIES = ["All", "Tech", "Investing", "World News", "Design", "Science", "Crypto", "Health", "Gaming"];
 
 const CURATED_FEEDS_INITIAL_COUNT = 6;
+
+// Lazy-built at module init after all curated data is defined
+function feedLabel(url: string): string {
+  for (const f of CURATED_FEEDS) {
+    if (f.url === url) return f.name;
+  }
+  for (const pack of INSPIRATION_PACKS) {
+    for (const s of pack.sources) {
+      if (s.type === "rss" && s.value === url) return s.label;
+    }
+  }
+  try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url; }
+}
 
 const CATEGORY_EMOJI: Record<string, string> = {
   "All": "⚡",
@@ -230,15 +243,15 @@ const CURATED_SUBSTACKS: CuratedSubstack[] = [
   { slug: "bigtechnology",      name: "Big Technology",          description: "Reporting on the most powerful companies in tech",    category: "Tech" },
   { slug: "platformer",         name: "Platformer",              description: "Platform policy, social media, and Big Tech",         category: "Tech" },
   // AI
-  { slug: "therundownai",       name: "The Rundown AI",          description: "Daily AI news and tools in 5 minutes",               category: "AI" },
+  { slug: "bensbites",           name: "Ben's Bites",             description: "Daily AI news and what it means for you",            category: "AI" },
   { slug: "importai",           name: "Import AI",               description: "AI research analysis from Jack Clark",               category: "AI" },
-  { slug: "theneurondaily",     name: "The Neuron",              description: "Practical AI tools and use cases, daily",            category: "AI" },
+  { slug: "theneuron",           name: "The Neuron",              description: "Practical AI tools and use cases, daily",            category: "AI" },
   // Tech (cont.)
   { slug: "semianalysis",       name: "SemiAnalysis",            description: "Deep-dive semiconductor and AI chip industry analysis", category: "Tech" },
   // Startups
   { slug: "lennysnewsletter",   name: "Lenny's Newsletter",      description: "Product, growth, and career advice for builders",    category: "Startups" },
   { slug: "notboring",          name: "Not Boring",              description: "Business strategy and company deep-dives",           category: "Startups" },
-  { slug: "mostlymetrics",      name: "Mostly Metrics",          description: "SaaS metrics, benchmarks, and growth insights",     category: "Startups" },
+  { slug: "cjgustafson",         name: "Mostly Metrics",          description: "SaaS metrics, benchmarks, and growth insights",     category: "Startups" },
   { slug: "profgalloway",       name: "No Mercy / No Malice",    description: "Scott Galloway on business, tech, and society",     category: "Startups", feedUrl: "https://www.profgmedia.com/feed", faviconDomain: "profgmedia.com" },
   { slug: "a16z",               name: "a16z",                    description: "Tech and startup insights from Andreessen Horowitz", category: "Startups", feedUrl: "https://www.a16z.news/feed", faviconDomain: "a16z.news" },
   // Finance
@@ -447,6 +460,10 @@ export default function DashboardClient(props: Props) {
   const [tickerError, setTickerError] = useState(false);
   const tickerDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tickerInputRef = useRef<HTMLInputElement>(null);
+  const [cityQuery, setCityQuery] = useState(() => blocksToState(props.blocks).weatherCity);
+  const [cityResults, setCityResults] = useState<{ name: string; state?: string; country: string; label: string }[]>([]);
+  const [cityDropdownOpen, setCityDropdownOpen] = useState(false);
+  const cityDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [cryptoCoinInput, setCryptoCoinInput] = useState("");
   const dragKey = useRef<string | null>(null);
   const dragPosition = useRef<"before" | "after" | null>(null);
@@ -561,6 +578,35 @@ export default function DashboardClient(props: Props) {
     }, 300);
   }
 
+  function searchCity(q: string) {
+    setCityQuery(q);
+    if (cityDebounce.current) clearTimeout(cityDebounce.current);
+    if (!q.trim()) {
+      setCityResults([]);
+      setCityDropdownOpen(false);
+      setStack((s) => ({ ...s, weatherCity: "" }));
+      return;
+    }
+    cityDebounce.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/geocode?q=${encodeURIComponent(q.trim())}`);
+        const data = await res.json();
+        if (!res.ok) return;
+        setCityResults(data.results ?? []);
+        setCityDropdownOpen((data.results ?? []).length > 0);
+      } catch {
+        setCityResults([]);
+      }
+    }, 300);
+  }
+
+  function selectCity(result: { name: string; label: string }) {
+    setStack((s) => ({ ...s, weatherCity: result.name }));
+    setCityQuery(result.label);
+    setCityResults([]);
+    setCityDropdownOpen(false);
+  }
+
   function addTicker(symbol: string) {
     const upper = symbol.toUpperCase();
     const existing = stack.stockTickers
@@ -647,7 +693,7 @@ export default function DashboardClient(props: Props) {
   function removeSection(key: string) {
     setStack((s) => {
       switch (key) {
-        case "weather": return { ...s, weather: false, weatherCity: "" };
+        case "weather": setCityQuery(""); return { ...s, weather: false, weatherCity: "" };
         case "stocks": return { ...s, stocks: false, stockTickers: "" };
         case "crypto": return { ...s, crypto: false, cryptoCoins: "" };
         case "reddit": return { ...s, subreddits: [] };
@@ -663,6 +709,7 @@ export default function DashboardClient(props: Props) {
   useEffect(() => () => {
     if (tickerDebounce.current) clearTimeout(tickerDebounce.current);
     if (feedDebounce.current) clearTimeout(feedDebounce.current);
+    if (cityDebounce.current) clearTimeout(cityDebounce.current);
   }, []);
 
   function addValidatedFeed() {
@@ -836,14 +883,42 @@ export default function DashboardClient(props: Props) {
               compact
             >
               {stack.weather && (
-                <input
-                  type="text"
-                  value={stack.weatherCity}
-                  onChange={(e) => setStack((s) => ({ ...s, weatherCity: e.target.value }))}
-                  onClick={(e) => e.stopPropagation()}
-                  placeholder="Enter city…"
-                  className="mt-2 w-full border-b border-waffle-brown/20 bg-transparent text-sm text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:border-waffle-orange py-1"
-                />
+                <div className="relative mt-2" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="text"
+                    value={cityQuery}
+                    onChange={(e) => searchCity(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") setCityDropdownOpen(false);
+                      if (e.key === "Enter" && cityResults.length > 0) selectCity(cityResults[0]);
+                    }}
+                    onFocus={() => cityResults.length > 0 && setCityDropdownOpen(true)}
+                    onBlur={() => setTimeout(() => setCityDropdownOpen(false), 150)}
+                    placeholder="Search city…"
+                    className="w-full border-b border-waffle-brown/20 bg-transparent text-sm text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:border-waffle-orange py-1"
+                  />
+                  {cityDropdownOpen && (
+                    <ul className="absolute left-0 right-0 top-full z-50 bg-white border border-waffle-brown/15 rounded-xl shadow-lg overflow-hidden mt-1">
+                      {cityResults.map((r) => (
+                        <li key={r.label}>
+                          <button
+                            type="button"
+                            onMouseDown={() => selectCity(r)}
+                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-waffle-pale text-left transition-colors"
+                          >
+                            <span className="text-base leading-none">⛅</span>
+                            <span className="text-sm text-waffle-brown">{r.name}</span>
+                            {(r.state || r.country) && (
+                              <span className="text-xs text-waffle-brown/50 truncate">
+                                {[r.state, r.country].filter(Boolean).join(", ")}
+                              </span>
+                            )}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               )}
             </NodeCard>
 
@@ -1079,6 +1154,7 @@ export default function DashboardClient(props: Props) {
                     {stack.feeds.length > 0 && (
                       <div className="flex flex-wrap gap-1.5">
                         {stack.feeds.map((feed) => {
+                          const label = feedLabel(feed);
                           const domain = (() => { try { return new URL(feed).hostname.replace(/^www\./, ""); } catch { return feed; } })();
                           return (
                             <span
@@ -1093,11 +1169,11 @@ export default function DashboardClient(props: Props) {
                                 alt=""
                                 className="flex-shrink-0 rounded-sm"
                               />
-                              <span className="truncate">{domain}</span>
+                              <span className="truncate">{label}</span>
                               <button
                                 onClick={() => setStack((s) => ({ ...s, feeds: s.feeds.filter((f) => f !== feed) }))}
                                 className="text-waffle-brown/30 hover:text-red-500 transition-colors flex-shrink-0 leading-none"
-                                aria-label={`Remove ${domain}`}
+                                aria-label={`Remove ${label}`}
                               >
                                 ×
                               </button>
@@ -1451,10 +1527,9 @@ export default function DashboardClient(props: Props) {
                   }
                   if (key === "rss") {
                     stack.feeds.forEach((feed) => {
-                      const short = feed.replace(/^https?:\/\/(www\.)?/, "").split("/")[0];
                       subItems.push({
                         key: feed,
-                        label: short,
+                        label: feedLabel(feed),
                         onRemove: () => setStack((s) => ({ ...s, feeds: s.feeds.filter((f) => f !== feed) })),
                       });
                     });
