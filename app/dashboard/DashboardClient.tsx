@@ -904,12 +904,11 @@ export default function DashboardClient(props: Props) {
                           <button
                             type="button"
                             onMouseDown={() => selectCity(r)}
-                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-waffle-pale text-left transition-colors"
+                            className="w-full px-3 py-2 hover:bg-waffle-pale text-left transition-colors"
                           >
-                            <span className="text-base leading-none">⛅</span>
                             <span className="text-sm text-waffle-brown">{r.name}</span>
                             {(r.state || r.country) && (
-                              <span className="text-xs text-waffle-brown/50 truncate">
+                              <span className="text-xs text-waffle-brown/50 ml-1.5">
                                 {[r.state, r.country].filter(Boolean).join(", ")}
                               </span>
                             )}
