@@ -4,6 +4,7 @@ import { createAuthClient } from "@/lib/supabase-auth";
 import { supabase } from "@/lib/supabase";
 import { getStripe } from "@/lib/stripe";
 import SignOutButton from "./SignOutButton";
+import DeleteAccountButton from "./DeleteAccountButton";
 
 function statusLabel(status: string): { text: string; color: string } {
   switch (status) {
@@ -202,8 +203,9 @@ export default async function SettingsPage() {
               <span className="text-sm text-waffle-brown/60">Email</span>
               <span className="text-sm text-waffle-brown/80 font-medium">{userRecord?.email}</span>
             </div>
-            <div className="pt-1">
+            <div className="pt-1 flex items-center justify-between">
               <SignOutButton />
+              <DeleteAccountButton />
             </div>
           </div>
         </div>
