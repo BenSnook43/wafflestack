@@ -18,7 +18,7 @@ const HOW_IT_WORKS = [
   },
 ];
 
-const INTERESTS = ["Tech", "Cooking", "Finance", "Music", "Design", "Health", "Cinema", "Travel"];
+const INTERESTS = ["Tech", "World News", "Finance", "Science", "Design", "Health", "Crypto", "Gaming"];
 
 export default function Home() {
   return (

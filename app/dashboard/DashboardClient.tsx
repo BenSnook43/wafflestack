@@ -314,6 +314,17 @@ function TickerLogo({ symbol, size = 24 }: { symbol: string; size?: number }) {
   );
 }
 
+function rssFaviconDomain(feedUrl: string): string {
+  try {
+    let h = new URL(feedUrl).hostname;
+    h = h.replace(/^(feeds?|www|rss|search|newsnetwork)\./i, "");
+    if (h === "bbci.co.uk") h = "bbc.co.uk";
+    return h;
+  } catch {
+    return "";
+  }
+}
+
 function sourceIcon(src: InspirationSource) {
   if (src.type === "hacker_news") {
     return <img src="/icons/hacker-news.png" width={20} height={20} alt="Hacker News" className="rounded flex-shrink-0" />;
@@ -323,7 +334,14 @@ function sourceIcon(src: InspirationSource) {
   }
   if (src.type === "ticker") return <TickerLogo symbol={src.value} size={20} />;
   if (src.type === "crypto") return <span className="flex-shrink-0 text-sm font-bold">₿</span>;
-  if (src.type === "rss") return <span className="flex-shrink-0">📡</span>;
+  if (src.type === "rss") {
+    const domain = rssFaviconDomain(src.value);
+    if (domain) {
+      // eslint-disable-next-line @next/next/no-img-element
+      return <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`} width={20} height={20} alt="" className="rounded-sm flex-shrink-0" />;
+    }
+    return <span className="flex-shrink-0">📡</span>;
+  }
   if (src.type === "weather") return <span className="flex-shrink-0">⛅</span>;
 }
 
@@ -449,6 +467,9 @@ function isInStack(src: InspirationSource, s: StackState): boolean {
 export default function DashboardClient(props: Props) {
   const [stack, setStack] = useState<StackState>(() => blocksToState(props.blocks));
   const [saveStatus, setSaveStatus] = useState<"idle" | "loading" | "saved" | "error">("idle");
+  const [isDirty, setIsDirty] = useState(false);
+  const [hasSaved, setHasSaved] = useState(props.emailsSent > 0);
+  const lastSavedStack = useRef<StackState>(stack);
   const [subCheck, setSubCheck] = useState<"idle" | "checking" | "invalid">("idle");
   const [substackInput, setSubstackInput] = useState("");
   const [substackCheck, setSubstackCheck] = useState<"idle" | "checking" | "invalid">("idle");
@@ -712,6 +733,13 @@ export default function DashboardClient(props: Props) {
     if (cityDebounce.current) clearTimeout(cityDebounce.current);
   }, []);
 
+  useEffect(() => {
+    const dirty =
+      JSON.stringify(stateToSavePayload(stack)) !==
+      JSON.stringify(stateToSavePayload(lastSavedStack.current));
+    setIsDirty(dirty);
+  }, [stack]);
+
   function addValidatedFeed() {
     const url = feedValidation.feedUrl;
     if (!url || stack.feeds.includes(url)) return;
@@ -805,6 +833,9 @@ export default function DashboardClient(props: Props) {
       body: JSON.stringify(stateToSavePayload(stack)),
     });
     if (res.ok) {
+      lastSavedStack.current = stack;
+      setIsDirty(false);
+      setHasSaved(true);
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus("idle"), 2500);
     } else {
@@ -866,12 +897,33 @@ export default function DashboardClient(props: Props) {
         <div className="space-y-8">
           <div>
             <h2 className="text-3xl font-extrabold italic text-waffle-brown leading-tight mb-1">
-              Edit Your Stack.
+              {activeSectionOrder.length === 0 ? "Build Your Stack." : "Edit Your Stack."}
             </h2>
             <p className="text-waffle-brown/55 text-sm">
-              Toggle nodes on or off. Changes are saved when you hit Save.
+              {activeSectionOrder.length === 0
+                ? "Pick sources below, or tap ✨ Get Inspired for curated starter packs."
+                : "Toggle nodes on or off. Changes are saved when you hit Save."}
             </p>
           </div>
+
+          {activeSectionOrder.length === 0 && (
+            <div className="bg-waffle-orange/8 border border-waffle-orange/20 rounded-2xl px-5 py-5 flex items-start gap-4">
+              <span className="text-3xl leading-none mt-0.5">🧇</span>
+              <div className="space-y-2">
+                <p className="font-bold text-waffle-brown">Welcome to WaffleStack!</p>
+                <p className="text-sm text-waffle-brown/65 leading-relaxed">
+                  Your digest is empty. Toggle a source below to get started, or use{" "}
+                  <button
+                    onClick={() => setInspiredOpen(true)}
+                    className="text-waffle-orange font-semibold underline underline-offset-2 hover:no-underline"
+                  >
+                    ✨ Get Inspired
+                  </button>{" "}
+                  to add a curated set of sources in one tap.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Compact sources */}
           <section className="grid sm:grid-cols-2 gap-3 items-stretch">
@@ -1604,17 +1656,23 @@ export default function DashboardClient(props: Props) {
             <button
               onClick={handleSave}
               disabled={saveStatus === "loading"}
-              className="w-full bg-waffle-orange hover:bg-waffle-orange/90 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-colors text-sm"
+              className={`w-full bg-waffle-orange hover:bg-waffle-orange/90 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-colors text-sm ${isDirty ? "ring-2 ring-waffle-orange ring-offset-2" : ""}`}
             >
-              {saveStatus === "loading" ? "Saving…" : saveStatus === "saved" ? "Saved ✓" : "Save Stack"}
+              {saveStatus === "loading" ? "Saving…" : saveStatus === "saved" ? "Saved ✓" : isDirty ? "Save Changes →" : "Save Stack"}
             </button>
             {saveStatus === "error" && (
               <p className="text-xs text-red-600 text-center">Failed to save. Try again.</p>
             )}
 
-            <p className="text-xs text-waffle-brown/30 text-center">
-              Your digest is delivered at 7:00 AM
-            </p>
+            {hasSaved && props.emailsSent === 0 ? (
+              <p className="text-xs text-green-600 font-semibold text-center">
+                ✓ Your first digest arrives tomorrow at 7 AM
+              </p>
+            ) : (
+              <p className="text-xs text-waffle-brown/30 text-center">
+                Your digest is delivered at 7:00 AM
+              </p>
+            )}
             {props.emailsSent > 0 && (
               <p className="text-xs text-waffle-brown/30 text-center">
                 {props.emailsSent} digest{props.emailsSent !== 1 ? "s" : ""} sent so far
@@ -1637,9 +1695,9 @@ export default function DashboardClient(props: Props) {
           <button
             onClick={handleSave}
             disabled={saveStatus === "loading"}
-            className="w-full bg-waffle-orange hover:bg-waffle-orange/90 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl transition-colors"
+            className={`w-full bg-waffle-orange hover:bg-waffle-orange/90 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl transition-colors ${isDirty ? "ring-2 ring-waffle-orange ring-offset-2" : ""}`}
           >
-            {saveStatus === "loading" ? "Saving…" : saveStatus === "saved" ? "Saved ✓" : "Save Stack"}
+            {saveStatus === "loading" ? "Saving…" : saveStatus === "saved" ? "Saved ✓" : isDirty ? "Save Changes →" : "Save Stack"}
           </button>
           {saveStatus === "error" && (
             <p className="text-xs text-red-600 text-center">Failed to save. Try again.</p>

@@ -82,7 +82,7 @@ export default function OnboardPage() {
             Let&apos;s get you set up.
           </h1>
           <p className="text-waffle-brown/55">
-            14-day free trial. No credit card required.
+            14-day free trial, then $5/month. No credit card required.
           </p>
         </div>
 
