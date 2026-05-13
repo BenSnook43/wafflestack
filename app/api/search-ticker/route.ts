@@ -19,8 +19,15 @@ export async function GET(req: NextRequest) {
 
   const data = await res.json();
   // Filter to equity/ETF types and limit results
+  // Exclude foreign-exchange qualified symbols (e.g. ASML.AS, BP.L, BMW.DE).
+  // These have 2+ uppercase letter suffixes after a dot. Single-letter suffixes
+  // like BRK.B are US share classes and work fine on Finnhub free tier.
+  const foreignExchangeSuffix = /\.[A-Z]{2,}$/;
   const results = (data.result ?? [])
-    .filter((r: { type: string }) => ["Common Stock", "ETP", "ETF"].includes(r.type))
+    .filter((r: { type: string; symbol: string }) =>
+      ["Common Stock", "ETP", "ETF"].includes(r.type) &&
+      !foreignExchangeSuffix.test(r.symbol)
+    )
     .slice(0, 8)
     .map((r: { symbol: string; description: string }) => ({
       symbol: r.symbol,
