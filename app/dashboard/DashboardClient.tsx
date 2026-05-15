@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { SOURCE_LIMITS } from "@/lib/source-limits";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -462,6 +463,21 @@ function isInStack(src: InspirationSource, s: StackState): boolean {
   }
 }
 
+// ── Source limit badge ───────────────────────────────────────────────────────
+
+function LimitBadge({ count, max, full }: { count: number; max: number; full: boolean }) {
+  return (
+    <span
+      className={`text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded-md ${
+        full ? "bg-waffle-orange/15 text-waffle-orange" : "bg-waffle-pale text-waffle-brown/40"
+      }`}
+      title={full ? `Limit reached — remove one to add another` : `${max - count} more allowed`}
+    >
+      {count}/{max}
+    </span>
+  );
+}
+
 // ── Main component ───────────────────────────────────────────────────────────
 
 export default function DashboardClient(props: Props) {
@@ -501,17 +517,19 @@ export default function DashboardClient(props: Props) {
   const feedDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function toggleSub(sub: string) {
-    setStack((s) => ({
-      ...s,
-      subreddits: s.subreddits.includes(sub)
-        ? s.subreddits.filter((r) => r !== sub)
-        : [...s.subreddits, sub],
-    }));
+    setStack((s) => {
+      if (s.subreddits.includes(sub)) {
+        return { ...s, subreddits: s.subreddits.filter((r) => r !== sub) };
+      }
+      if (s.subreddits.length >= SOURCE_LIMITS.subreddits) return s;
+      return { ...s, subreddits: [...s.subreddits, sub] };
+    });
   }
 
   async function addCustomSub() {
     const cleaned = stack.customSub.trim().toLowerCase().replace(/^r\//, "");
     if (!cleaned || stack.subreddits.includes(cleaned)) return;
+    if (stack.subreddits.length >= SOURCE_LIMITS.subreddits) return;
 
     setSubCheck("checking");
     try {
@@ -541,6 +559,7 @@ export default function DashboardClient(props: Props) {
     const feedUrl = `https://${slug}.substack.com/feed`;
 
     if (stack.substackFeeds.includes(feedUrl)) return;
+    if (stack.substackFeeds.length >= SOURCE_LIMITS.substack) return;
 
     setSubstackCheck("checking");
     try {
@@ -633,6 +652,7 @@ export default function DashboardClient(props: Props) {
     const existing = stack.stockTickers
       .split(",").map((t) => t.trim().toUpperCase()).filter(Boolean);
     if (existing.includes(upper)) return;
+    if (existing.length >= SOURCE_LIMITS.stocks) return;
     setStack((s) => ({
       ...s,
       stocks: true,
@@ -657,6 +677,7 @@ export default function DashboardClient(props: Props) {
     const upper = symbol.toUpperCase();
     const existing = stack.cryptoCoins.split(",").map((c) => c.trim().toUpperCase()).filter(Boolean);
     if (existing.includes(upper)) return;
+    if (existing.length >= SOURCE_LIMITS.crypto) return;
     setStack((s) => ({
       ...s,
       crypto: true,
@@ -743,12 +764,14 @@ export default function DashboardClient(props: Props) {
   function addValidatedFeed() {
     const url = feedValidation.feedUrl;
     if (!url || stack.feeds.includes(url)) return;
+    if (stack.feeds.length >= SOURCE_LIMITS.rss) return;
     setStack((s) => ({ ...s, feeds: [...s.feeds, url], customFeed: "" }));
     setFeedValidation({ status: "idle" });
   }
 
   function addFeedUrl(url: string) {
     if (!url || stack.feeds.includes(url)) return;
+    if (stack.feeds.length >= SOURCE_LIMITS.rss) return;
     setStack((s) => ({ ...s, feeds: [...s.feeds, url] }));
   }
 
@@ -783,6 +806,7 @@ export default function DashboardClient(props: Props) {
       switch (src.type) {
         case "subreddit": {
           if (s.subreddits.map((r) => r.toLowerCase()).includes(src.value.toLowerCase())) return s;
+          if (s.subreddits.length >= SOURCE_LIMITS.subreddits) return s;
           return { ...s, subreddits: [...s.subreddits, src.value] };
         }
         case "hacker_news":
@@ -792,6 +816,7 @@ export default function DashboardClient(props: Props) {
             ? s.stockTickers.split(",").map((t) => t.trim().toUpperCase()).filter(Boolean)
             : [];
           if (existing.includes(src.value.toUpperCase())) return s;
+          if (existing.length >= SOURCE_LIMITS.stocks) return s;
           return { ...s, stocks: true, stockTickers: [...existing, src.value.toUpperCase()].join(", ") };
         }
         case "crypto": {
@@ -799,10 +824,12 @@ export default function DashboardClient(props: Props) {
             ? s.cryptoCoins.split(",").map((c) => c.trim().toUpperCase()).filter(Boolean)
             : [];
           if (existing.includes(src.value.toUpperCase())) return s;
+          if (existing.length >= SOURCE_LIMITS.crypto) return s;
           return { ...s, crypto: true, cryptoCoins: [...existing, src.value.toUpperCase()].join(", ") };
         }
         case "rss":
           if (s.feeds.includes(src.value)) return s;
+          if (s.feeds.length >= SOURCE_LIMITS.rss) return s;
           return { ...s, rss: true, feeds: [...s.feeds, src.value] };
         case "weather":
           return { ...s, weather: true };
@@ -812,6 +839,16 @@ export default function DashboardClient(props: Props) {
 
   const hasAnyBlock =
     stack.weather || stack.stocks || stack.crypto || stack.subreddits.length > 0 || stack.hackerNews || stack.feeds.length > 0 || stack.substackFeeds.length > 0;
+
+  const tickerCount = stack.stockTickers.split(",").map((t) => t.trim()).filter(Boolean).length;
+  const coinCount = stack.cryptoCoins.split(",").map((c) => c.trim()).filter(Boolean).length;
+  const limits = {
+    subreddits: { count: stack.subreddits.length, max: SOURCE_LIMITS.subreddits, full: stack.subreddits.length >= SOURCE_LIMITS.subreddits },
+    stocks: { count: tickerCount, max: SOURCE_LIMITS.stocks, full: tickerCount >= SOURCE_LIMITS.stocks },
+    crypto: { count: coinCount, max: SOURCE_LIMITS.crypto, full: coinCount >= SOURCE_LIMITS.crypto },
+    rss: { count: stack.feeds.length, max: SOURCE_LIMITS.rss, full: stack.feeds.length >= SOURCE_LIMITS.rss },
+    substack: { count: stack.substackFeeds.length, max: SOURCE_LIMITS.substack, full: stack.substackFeeds.length >= SOURCE_LIMITS.substack },
+  };
 
   // Active sections in user-defined order
   const activeSectionOrder = stack.sectionOrder.filter((key) => {
@@ -986,6 +1023,9 @@ export default function DashboardClient(props: Props) {
             >
               {stack.stocks && (
                 <div className="mt-2 space-y-2" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex justify-end">
+                      <LimitBadge {...limits.stocks} />
+                    </div>
                     {/* Ticker chips */}
                     {stack.stockTickers.split(",").map((t) => t.trim().toUpperCase()).filter(Boolean).length > 0 && (
                       <div className="flex flex-wrap gap-1.5">
@@ -1009,6 +1049,11 @@ export default function DashboardClient(props: Props) {
                       </div>
                     )}
                     {/* Search input */}
+                    {limits.stocks.full ? (
+                      <p className="text-[11px] text-waffle-orange/80 py-1">
+                        Ticker limit reached ({limits.stocks.max}). Remove one to add another.
+                      </p>
+                    ) : (
                     <div className="relative">
                       <input
                         ref={tickerInputRef}
@@ -1046,6 +1091,7 @@ export default function DashboardClient(props: Props) {
                         </ul>
                       )}
                     </div>
+                    )}
                 </div>
               )}
             </NodeCard>
@@ -1059,6 +1105,9 @@ export default function DashboardClient(props: Props) {
             >
               {stack.crypto && (
                 <div className="mt-2 space-y-2" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex justify-end">
+                      <LimitBadge {...limits.crypto} />
+                    </div>
                     {/* Coin chips */}
                     {stack.cryptoCoins.split(",").map((c) => c.trim().toUpperCase()).filter(Boolean).length > 0 && (
                       <div className="flex flex-wrap gap-1.5">
@@ -1082,6 +1131,11 @@ export default function DashboardClient(props: Props) {
                       </div>
                     )}
                     {/* Coin input */}
+                    {limits.crypto.full ? (
+                      <p className="text-[11px] text-waffle-orange/80 py-1">
+                        Coin limit reached ({limits.crypto.max}). Remove one to add another.
+                      </p>
+                    ) : (<>
                     <div className="flex gap-2">
                       <input
                         type="text"
@@ -1109,6 +1163,7 @@ export default function DashboardClient(props: Props) {
                       </button>
                     </div>
                     <p className="text-[10px] text-waffle-brown/30">Enter symbol (BTC, ETH, SOL…) and press Enter or Add</p>
+                    </>)}
                 </div>
               )}
             </NodeCard>
@@ -1126,6 +1181,7 @@ export default function DashboardClient(props: Props) {
           <section className="space-y-3">
             <h3 className="text-xs font-bold text-waffle-brown/40 uppercase tracking-widest flex items-center gap-2">
               <img src="/icons/reddit.png" width={14} height={14} alt="Reddit" className="rounded-full" /> Reddit Nodes
+              <span className="ml-auto"><LimitBadge {...limits.subreddits} /></span>
             </h3>
             <div className="grid grid-cols-2 gap-3">
               {PRESET_SUBS.map((sub) => (
@@ -1153,6 +1209,11 @@ export default function DashboardClient(props: Props) {
                 ))}
             </div>
             <div className="space-y-1">
+              {limits.subreddits.full ? (
+                <p className="text-[11px] text-waffle-orange/80 px-1">
+                  Subreddit limit reached ({limits.subreddits.max}). Remove one to add another.
+                </p>
+              ) : (
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -1175,6 +1236,7 @@ export default function DashboardClient(props: Props) {
                   {subCheck === "checking" ? "Checking…" : "Add"}
                 </button>
               </div>
+              )}
               {subCheck === "invalid" && (
                 <p className="text-xs text-red-500 px-1">
                   r/{stack.customSub.trim().toLowerCase().replace(/^r\//, "")} doesn&apos;t exist on Reddit
@@ -1200,6 +1262,10 @@ export default function DashboardClient(props: Props) {
               >
                 {stack.rss && (
                   <div className="mt-3 space-y-3" onClick={(e) => e.stopPropagation()}>
+
+                    <div className="flex justify-end">
+                      <LimitBadge {...limits.rss} />
+                    </div>
 
                     {/* Already-added feed chips */}
                     {stack.feeds.length > 0 && (
@@ -1235,6 +1301,11 @@ export default function DashboardClient(props: Props) {
                     )}
 
                     {/* URL input with validation */}
+                    {limits.rss.full ? (
+                      <p className="text-[11px] text-waffle-orange/80 px-1">
+                        Feed limit reached ({limits.rss.max}). Remove one to add another.
+                      </p>
+                    ) : (
                     <div className="space-y-1.5">
                       <div className="flex items-center gap-1.5">
                         <div className="relative flex-1">
@@ -1275,6 +1346,7 @@ export default function DashboardClient(props: Props) {
                         <p className="text-[11px] text-red-500 px-1">No RSS feed found at this URL</p>
                       )}
                     </div>
+                    )}
 
                     {/* Divider */}
                     <div className="border-t border-waffle-brown/10" />
@@ -1385,6 +1457,10 @@ export default function DashboardClient(props: Props) {
               >
                 <div className="mt-2 space-y-3" onClick={(e) => e.stopPropagation()}>
 
+                  <div className="flex justify-end">
+                    <LimitBadge {...limits.substack} />
+                  </div>
+
                   {/* Popular newsletters */}
                   <div className="space-y-2">
                     <p className="text-[10px] font-bold text-waffle-brown/35 uppercase tracking-widest">Popular newsletters</p>
@@ -1429,7 +1505,11 @@ export default function DashboardClient(props: Props) {
                                     if (alreadyAdded) {
                                       setStack((s) => ({ ...s, substackFeeds: s.substackFeeds.filter((f) => f !== url) }));
                                     } else {
-                                      setStack((s) => ({ ...s, substackFeeds: [...s.substackFeeds, url] }));
+                                      setStack((s) =>
+                                        s.substackFeeds.length >= SOURCE_LIMITS.substack
+                                          ? s
+                                          : { ...s, substackFeeds: [...s.substackFeeds, url] }
+                                      );
                                     }
                                   }}
                                   className={`flex flex-col gap-1.5 p-2 rounded-xl border text-left transition-colors cursor-pointer ${
@@ -1503,6 +1583,11 @@ export default function DashboardClient(props: Props) {
                         </div>
                       );
                     })}
+                    {limits.substack.full ? (
+                      <p className="text-[11px] text-waffle-orange/80 px-0.5">
+                        Newsletter limit reached ({limits.substack.max}). Remove one to add another.
+                      </p>
+                    ) : (
                     <div className="flex gap-1.5">
                       <input
                         type="text"
@@ -1524,6 +1609,7 @@ export default function DashboardClient(props: Props) {
                         {substackCheck === "checking" ? "Checking…" : "Add"}
                       </button>
                     </div>
+                    )}
                     {substackCheck === "invalid" && (
                       <p className="text-xs text-red-500 px-0.5">
                         No Substack found at {substackInput.trim().toLowerCase().replace(/^https?:\/\//, "").split(".")[0]}.substack.com

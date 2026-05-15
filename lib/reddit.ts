@@ -16,6 +16,7 @@ export async function checkSubredditExists(
       }
     );
 
+    if (res.status === 404) return { exists: false };
     if (!res.ok) return { exists: true, canonical: cleaned.toLowerCase() };
 
     const json = await res.json();

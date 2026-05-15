@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { validateSubreddits } from "@/lib/validate-subreddits";
+import { checkSourceLimits, SOURCE_LABELS } from "@/lib/source-limits";
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
@@ -10,6 +11,14 @@ export async function POST(req: NextRequest) {
 
   if (!email || typeof email !== "string" || !email.includes("@")) {
     return NextResponse.json({ error: "A valid email is required." }, { status: 400 });
+  }
+
+  const violation = checkSourceLimits({ subreddits, stocks, crypto: body.crypto, rss_feeds });
+  if (violation) {
+    return NextResponse.json(
+      { error: `Too many ${SOURCE_LABELS[violation.kind]} (${violation.count}). The limit is ${violation.limit}.` },
+      { status: 400 }
+    );
   }
 
   // Validate subreddits before saving

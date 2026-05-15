@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAuthClient } from "@/lib/supabase-auth";
 import { supabase } from "@/lib/supabase";
+import { checkSourceLimits, SOURCE_LABELS } from "@/lib/source-limits";
 
 export async function PATCH(req: NextRequest) {
   // Verify session
@@ -14,6 +15,14 @@ export async function PATCH(req: NextRequest) {
   if (!body) return NextResponse.json({ error: "Invalid request." }, { status: 400 });
 
   const { location, subreddits, stocks, crypto, rss_feeds, hacker_news, section_order, active } = body;
+
+  const violation = checkSourceLimits({ subreddits, stocks, crypto, rss_feeds });
+  if (violation) {
+    return NextResponse.json(
+      { error: `Too many ${SOURCE_LABELS[violation.kind]} (${violation.count}). The limit is ${violation.limit}.` },
+      { status: 400 }
+    );
+  }
 
   // Look up user record by email
   const { data: userRecord, error: userErr } = await supabase
