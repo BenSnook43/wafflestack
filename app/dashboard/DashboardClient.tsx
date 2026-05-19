@@ -44,6 +44,14 @@ interface InspirationPack {
   sources: InspirationSource[];
 }
 
+interface OnboardingPack {
+  id: string;
+  label: string;
+  emoji: string;
+  description: string;
+  sources: InspirationSource[];
+}
+
 const INSPIRATION_PACKS: InspirationPack[] = [
   {
     label: "Tech",
@@ -164,6 +172,69 @@ const INSPIRATION_PACKS: InspirationPack[] = [
       { type: "rss", value: "https://www.rockpapershotgun.com/feed/", label: "Rock Paper Shotgun" },
       { type: "rss", value: "https://www.eurogamer.net/feed", label: "Eurogamer" },
       { type: "rss", value: "https://www.pcgamer.com/rss/", label: "PC Gamer" },
+    ],
+  },
+];
+
+const ONBOARDING_PACKS: OnboardingPack[] = [
+  {
+    id: "tech_ai",
+    label: "Tech & AI",
+    emoji: "💻",
+    description: "AI, tech platforms, developer chatter, and big product shifts.",
+    sources: [
+      { type: "hacker_news" },
+      { type: "subreddit", value: "technology", label: "r/technology" },
+      { type: "subreddit", value: "MachineLearning", label: "r/MachineLearning" },
+      { type: "rss", value: "https://feeds.arstechnica.com/arstechnica/index", label: "Ars Technica" },
+      { type: "rss", value: "https://www.theverge.com/rss/index.xml", label: "The Verge" },
+    ],
+  },
+  {
+    id: "investing",
+    label: "Investing",
+    emoji: "📈",
+    description: "Market news, investing discussion, and broad finance headlines.",
+    sources: [
+      { type: "subreddit", value: "investing", label: "r/investing" },
+      { type: "subreddit", value: "stocks", label: "r/stocks" },
+      { type: "rss", value: "https://feeds.marketwatch.com/marketwatch/topstories/", label: "MarketWatch" },
+      { type: "rss", value: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664", label: "CNBC Finance" },
+    ],
+  },
+  {
+    id: "us_politics",
+    label: "US Politics",
+    emoji: "🏛️",
+    description: "A calmer starter set for national politics and policy.",
+    sources: [
+      { type: "rss", value: "https://feeds.npr.org/1014/rss.xml", label: "NPR Politics" },
+      { type: "rss", value: "https://www.pbs.org/newshour/feeds/rss/politics", label: "PBS NewsHour Politics" },
+      { type: "rss", value: "https://thehill.com/feed/", label: "The Hill" },
+    ],
+  },
+  {
+    id: "world_news",
+    label: "World News",
+    emoji: "🌍",
+    description: "Global headlines from a few broad, readable outlets.",
+    sources: [
+      { type: "rss", value: "https://feeds.bbci.co.uk/news/world/rss.xml", label: "BBC World" },
+      { type: "rss", value: "https://feeds.npr.org/1001/rss.xml", label: "NPR News" },
+      { type: "rss", value: "https://www.theguardian.com/world/rss", label: "The Guardian World" },
+      { type: "rss", value: "https://www.aljazeera.com/xml/rss/all.xml", label: "Al Jazeera" },
+    ],
+  },
+  {
+    id: "sports",
+    label: "Sports",
+    emoji: "🏈",
+    description: "Top sports headlines plus NFL and NBA coverage.",
+    sources: [
+      { type: "rss", value: "https://www.espn.com/espn/rss/news", label: "ESPN Top Headlines" },
+      { type: "rss", value: "https://www.espn.com/espn/rss/nfl/news", label: "ESPN NFL" },
+      { type: "rss", value: "https://www.espn.com/espn/rss/nba/news", label: "ESPN NBA" },
+      { type: "subreddit", value: "sports", label: "r/sports" },
     ],
   },
 ];
@@ -459,6 +530,71 @@ function blocksToState(blocks: Block[]) {
 
 type StackState = ReturnType<typeof blocksToState>;
 
+function mergeSourceIntoStack(state: StackState, src: InspirationSource): StackState {
+  switch (src.type) {
+    case "subreddit": {
+      if (state.subreddits.map((r) => r.toLowerCase()).includes(src.value.toLowerCase())) return state;
+      if (state.subreddits.length >= SOURCE_LIMITS.subreddits) return state;
+      return { ...state, subreddits: [...state.subreddits, src.value] };
+    }
+    case "hacker_news":
+      return { ...state, hackerNews: true };
+    case "ticker": {
+      const existing = state.stockTickers
+        ? state.stockTickers.split(",").map((t) => t.trim().toUpperCase()).filter(Boolean)
+        : [];
+      if (existing.includes(src.value.toUpperCase())) return state;
+      if (existing.length >= SOURCE_LIMITS.stocks) return state;
+      return { ...state, stocks: true, stockTickers: [...existing, src.value.toUpperCase()].join(", ") };
+    }
+    case "crypto": {
+      const existing = state.cryptoCoins
+        ? state.cryptoCoins.split(",").map((c) => c.trim().toUpperCase()).filter(Boolean)
+        : [];
+      if (existing.includes(src.value.toUpperCase())) return state;
+      if (existing.length >= SOURCE_LIMITS.crypto) return state;
+      return { ...state, crypto: true, cryptoCoins: [...existing, src.value.toUpperCase()].join(", ") };
+    }
+    case "rss":
+      if (state.feeds.includes(src.value)) return state;
+      if (state.feeds.length >= SOURCE_LIMITS.rss) return state;
+      return { ...state, rss: true, feeds: [...state.feeds, src.value] };
+    case "weather":
+      return { ...state, weather: true };
+  }
+}
+
+function applyOnboardingPack(state: StackState, packIds: string[]): StackState {
+  let next = { ...state };
+  for (const packId of packIds) {
+    const pack = ONBOARDING_PACKS.find((p) => p.id === packId);
+    if (!pack) continue;
+    for (const src of pack.sources) {
+      next = mergeSourceIntoStack(next, src);
+    }
+  }
+  return next;
+}
+
+function onboardingSummary(state: StackState) {
+  const rows: { key: string; label: string; items: string[] }[] = [];
+
+  if (state.weather && state.weatherCity) {
+    rows.push({ key: "weather", label: "Weather", items: [state.weatherCity] });
+  }
+  if (state.hackerNews) {
+    rows.push({ key: "hacker_news", label: "Tech", items: ["Hacker News"] });
+  }
+  if (state.subreddits.length > 0) {
+    rows.push({ key: "reddit", label: "Reddit", items: state.subreddits.map((sub) => `r/${sub}`) });
+  }
+  if (state.feeds.length > 0) {
+    rows.push({ key: "feeds", label: "Publications", items: state.feeds.map(feedLabel) });
+  }
+
+  return rows;
+}
+
 function stateToSavePayload(state: StackState) {
   const sectionOrder = state.sectionOrder.filter((key) => {
     if (key === "weather") return state.weather;
@@ -560,6 +696,10 @@ export default function DashboardClient(props: Props) {
   const [showAllCuratedFeeds, setShowAllCuratedFeeds] = useState(false);
   const [substackCategory, setSubstackCategory] = useState<string>("All");
   const [showAllSubstacks, setShowAllSubstacks] = useState(false);
+  const [setupOpen, setSetupOpen] = useState(props.blocks.length === 0);
+  const [setupDismissed, setSetupDismissed] = useState(false);
+  const [setupStep, setSetupStep] = useState<1 | 2 | 3>(1);
+  const [selectedOnboardingPacks, setSelectedOnboardingPacks] = useState<string[]>([]);
   const feedDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function toggleSub(sub: string) {
@@ -687,7 +827,7 @@ export default function DashboardClient(props: Props) {
   }
 
   function selectCity(result: { name: string; label: string }) {
-    setStack((s) => ({ ...s, weatherCity: result.name }));
+    setStack((s) => ({ ...s, weather: true, weatherCity: result.name }));
     setCityQuery(result.label);
     setCityResults([]);
     setCityDropdownOpen(false);
@@ -848,39 +988,7 @@ export default function DashboardClient(props: Props) {
   }
 
   function addFromInspiration(src: InspirationSource) {
-    setStack((s) => {
-      switch (src.type) {
-        case "subreddit": {
-          if (s.subreddits.map((r) => r.toLowerCase()).includes(src.value.toLowerCase())) return s;
-          if (s.subreddits.length >= SOURCE_LIMITS.subreddits) return s;
-          return { ...s, subreddits: [...s.subreddits, src.value] };
-        }
-        case "hacker_news":
-          return { ...s, hackerNews: true };
-        case "ticker": {
-          const existing = s.stockTickers
-            ? s.stockTickers.split(",").map((t) => t.trim().toUpperCase()).filter(Boolean)
-            : [];
-          if (existing.includes(src.value.toUpperCase())) return s;
-          if (existing.length >= SOURCE_LIMITS.stocks) return s;
-          return { ...s, stocks: true, stockTickers: [...existing, src.value.toUpperCase()].join(", ") };
-        }
-        case "crypto": {
-          const existing = s.cryptoCoins
-            ? s.cryptoCoins.split(",").map((c) => c.trim().toUpperCase()).filter(Boolean)
-            : [];
-          if (existing.includes(src.value.toUpperCase())) return s;
-          if (existing.length >= SOURCE_LIMITS.crypto) return s;
-          return { ...s, crypto: true, cryptoCoins: [...existing, src.value.toUpperCase()].join(", ") };
-        }
-        case "rss":
-          if (s.feeds.includes(src.value)) return s;
-          if (s.feeds.length >= SOURCE_LIMITS.rss) return s;
-          return { ...s, rss: true, feeds: [...s.feeds, src.value] };
-        case "weather":
-          return { ...s, weather: true };
-      }
-    });
+    setStack((s) => mergeSourceIntoStack(s, src));
   }
 
   const hasAnyBlock =
@@ -908,24 +1016,68 @@ export default function DashboardClient(props: Props) {
     return false;
   });
 
-  async function handleSave() {
+  const showSetupOverlay = setupOpen && !setupDismissed;
+  const setupPreviewStack = applyOnboardingPack(stack, selectedOnboardingPacks);
+  const setupSummary = onboardingSummary(setupPreviewStack);
+
+  useEffect(() => {
+    if (activeSectionOrder.length === 0 && !setupDismissed) {
+      setSetupOpen(true);
+    }
+  }, [activeSectionOrder.length, setupDismissed]);
+
+  function toggleOnboardingPack(packId: string) {
+    setSelectedOnboardingPacks((current) => {
+      if (current.includes(packId)) return current.filter((id) => id !== packId);
+      if (current.length >= 3) return current;
+      return [...current, packId];
+    });
+  }
+
+  function skipSetupWeather() {
+    setStack((s) => ({ ...s, weather: false, weatherCity: "" }));
+    setCityQuery("");
+    setCityResults([]);
+    setCityDropdownOpen(false);
+    setSetupStep(2);
+  }
+
+  async function saveStack(nextStack: StackState) {
     setSaveStatus("loading");
     const res = await fetch("/api/preferences", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(stateToSavePayload(stack)),
+      body: JSON.stringify(stateToSavePayload(nextStack)),
     });
     if (res.ok) {
-      lastSavedStack.current = stack;
+      lastSavedStack.current = nextStack;
+      setStack(nextStack);
       setIsDirty(false);
       setHasSaved(true);
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus("idle"), 2500);
+      return true;
     } else {
       setSaveStatus("error");
+      return false;
     }
   }
 
+  async function handleSave() {
+    await saveStack(stack);
+  }
+
+  async function createOnboardingDigest() {
+    if (selectedOnboardingPacks.length === 0) return;
+    const nextStack = applyOnboardingPack(stack, selectedOnboardingPacks);
+    const saved = await saveStack(nextStack);
+    if (saved) {
+      setSetupOpen(false);
+      setSetupDismissed(true);
+      setSetupStep(1);
+      setSelectedOnboardingPacks([]);
+    }
+  }
 
   const badge = subscriptionBadge(props.subscriptionStatus, props.trialEndsAt);
 
@@ -1844,6 +1996,235 @@ export default function DashboardClient(props: Props) {
           </div>
         </div>
       </div>
+
+      {/* ── Guided first-run setup ── */}
+      {showSetupOverlay && (
+        <div className="fixed inset-0 z-50 bg-waffle-brown/30 backdrop-blur-sm flex items-center justify-center px-4 py-6">
+          <section className="w-full max-w-2xl max-h-[92vh] overflow-y-auto bg-waffle-cream border border-waffle-brown/15 rounded-2xl shadow-2xl">
+            <div className="px-5 sm:px-7 pt-6 pb-4 border-b border-waffle-brown/10">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-bold text-waffle-orange uppercase tracking-widest">
+                    Step {setupStep} of 3
+                  </p>
+                  <h2 className="text-2xl sm:text-3xl font-extrabold italic text-waffle-brown mt-1">
+                    {setupStep === 1 && "Start with weather."}
+                    {setupStep === 2 && "What should we cover?"}
+                    {setupStep === 3 && "Review your starter digest."}
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSetupOpen(false);
+                    setSetupDismissed(true);
+                  }}
+                  className="text-xs font-semibold text-waffle-brown/45 hover:text-waffle-brown border border-waffle-brown/15 rounded-full px-3 py-1.5 transition-colors"
+                >
+                  Skip and build manually
+                </button>
+              </div>
+              <div className="grid grid-cols-3 gap-2 mt-5" aria-hidden>
+                {[1, 2, 3].map((step) => (
+                  <div
+                    key={step}
+                    className={`h-1.5 rounded-full ${setupStep >= step ? "bg-waffle-orange" : "bg-waffle-brown/10"}`}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="px-5 sm:px-7 py-6">
+              {setupStep === 1 && (
+                <div className="space-y-5">
+                  <p className="text-sm text-waffle-brown/60 leading-relaxed">
+                    Add your local weather to the top of your morning digest. It is optional, but it makes the email feel immediately yours.
+                  </p>
+                  <div className="relative">
+                    <label className="block text-xs font-bold text-waffle-brown/45 uppercase tracking-widest mb-2">
+                      Your city
+                    </label>
+                    <input
+                      type="text"
+                      value={cityQuery}
+                      onChange={(e) => searchCity(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") setCityDropdownOpen(false);
+                        if (e.key === "Enter" && cityResults.length > 0) selectCity(cityResults[0]);
+                      }}
+                      onFocus={() => cityResults.length > 0 && setCityDropdownOpen(true)}
+                      onBlur={() => setTimeout(() => setCityDropdownOpen(false), 150)}
+                      placeholder="Search city..."
+                      className="w-full border border-waffle-brown/15 rounded-xl px-4 py-3 text-sm bg-white text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:ring-2 focus:ring-waffle-orange"
+                    />
+                    {cityDropdownOpen && (
+                      <ul className="absolute left-0 right-0 top-full z-50 bg-white border border-waffle-brown/15 rounded-xl shadow-lg overflow-hidden mt-1">
+                        {cityResults.map((r) => (
+                          <li key={r.label}>
+                            <button
+                              type="button"
+                              onMouseDown={() => selectCity(r)}
+                              className="w-full px-3 py-2 hover:bg-waffle-pale text-left transition-colors"
+                            >
+                              <span className="text-sm text-waffle-brown">{r.name}</span>
+                              {(r.state || r.country) && (
+                                <span className="text-xs text-waffle-brown/50 ml-1.5">
+                                  {[r.state, r.country].filter(Boolean).join(", ")}
+                                </span>
+                              )}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {stack.weather && stack.weatherCity && (
+                      <p className="text-xs text-green-600 font-semibold mt-2">
+                        Weather added for {stack.weatherCity}.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {setupStep === 2 && (
+                <div className="space-y-5">
+                  <div className="space-y-1">
+                    <p className="text-sm text-waffle-brown/60 leading-relaxed">
+                      We&apos;ll add a few reliable starter sources. You can remove anything later.
+                    </p>
+                    <p className="text-xs font-semibold text-waffle-brown/40">
+                      Pick 1-3 interests.
+                    </p>
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    {ONBOARDING_PACKS.map((pack) => {
+                      const selected = selectedOnboardingPacks.includes(pack.id);
+                      const disabled = !selected && selectedOnboardingPacks.length >= 3;
+                      return (
+                        <button
+                          key={pack.id}
+                          type="button"
+                          onClick={() => toggleOnboardingPack(pack.id)}
+                          disabled={disabled}
+                          className={`text-left rounded-xl border-2 p-4 transition-colors ${
+                            selected
+                              ? "border-waffle-orange bg-waffle-orange/8"
+                              : disabled
+                              ? "border-waffle-brown/8 bg-white/60 opacity-50 cursor-not-allowed"
+                              : "border-waffle-brown/10 bg-white hover:border-waffle-orange/40"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg leading-none">{pack.emoji}</span>
+                            <span className="flex-1 font-bold text-waffle-brown text-sm">{pack.label}</span>
+                            <span
+                              className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                                selected ? "bg-waffle-orange text-white" : "bg-waffle-brown/8 text-waffle-brown/30"
+                              }`}
+                            >
+                              {selected ? "✓" : "+"}
+                            </span>
+                          </div>
+                          <p className="text-xs text-waffle-brown/50 leading-relaxed mt-2">
+                            {pack.description}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {setupStep === 3 && (
+                <div className="space-y-5">
+                  <p className="text-sm text-waffle-brown/60 leading-relaxed">
+                    Here&apos;s what we&apos;ll start with. This is just a first draft of your digest.
+                  </p>
+                  <div className="space-y-3">
+                    {setupSummary.map((section) => (
+                      <div
+                        key={section.key}
+                        className="bg-white border border-waffle-brown/10 rounded-xl px-4 py-3"
+                      >
+                        <p className="text-xs font-bold text-waffle-brown/40 uppercase tracking-widest">
+                          {section.label}
+                        </p>
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {section.items.map((item) => (
+                            <span
+                              key={item}
+                              className="bg-waffle-pale text-waffle-brown/70 rounded-lg px-2 py-1 text-xs font-semibold"
+                            >
+                              {item}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="px-5 sm:px-7 py-4 border-t border-waffle-brown/10 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setSetupStep((step) => (step === 1 ? 1 : ((step - 1) as 1 | 2 | 3)))}
+                disabled={setupStep === 1 || saveStatus === "loading"}
+                className="text-sm font-semibold text-waffle-brown/45 hover:text-waffle-brown disabled:opacity-30 disabled:hover:text-waffle-brown/45 transition-colors"
+              >
+                Back
+              </button>
+
+              {setupStep === 1 && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={skipSetupWeather}
+                    className="px-4 py-2.5 rounded-xl text-sm font-semibold text-waffle-brown/55 hover:text-waffle-brown hover:bg-waffle-brown/5 transition-colors"
+                  >
+                    Skip weather
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSetupStep(2)}
+                    className="px-5 py-2.5 rounded-xl bg-waffle-brown text-waffle-cream text-sm font-bold hover:bg-waffle-espresso transition-colors"
+                  >
+                    Continue
+                  </button>
+                </div>
+              )}
+
+              {setupStep === 2 && (
+                <button
+                  type="button"
+                  onClick={() => setSetupStep(3)}
+                  disabled={selectedOnboardingPacks.length === 0}
+                  className="px-5 py-2.5 rounded-xl bg-waffle-brown text-waffle-cream text-sm font-bold hover:bg-waffle-espresso disabled:opacity-40 transition-colors"
+                >
+                  Review digest
+                </button>
+              )}
+
+              {setupStep === 3 && (
+                <button
+                  type="button"
+                  onClick={createOnboardingDigest}
+                  disabled={saveStatus === "loading" || selectedOnboardingPacks.length === 0}
+                  className="px-5 py-2.5 rounded-xl bg-waffle-orange text-white text-sm font-bold hover:bg-waffle-orange/90 disabled:opacity-50 transition-colors"
+                >
+                  {saveStatus === "loading" ? "Creating..." : "Create my digest"}
+                </button>
+              )}
+            </div>
+            {saveStatus === "error" && (
+              <p className="px-5 sm:px-7 pb-4 text-xs text-red-600 text-right">
+                Failed to save. Try again.
+              </p>
+            )}
+          </section>
+        </div>
+      )}
 
       {/* ── Inspiration drawer ── */}
       {inspiredOpen && (
