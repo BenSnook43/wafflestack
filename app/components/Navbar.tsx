@@ -20,7 +20,7 @@ export default async function Navbar() {
 
           {user ? (
             <>
-              <Link href="/dashboard" className="hidden sm:inline-flex text-waffle-brown/70 hover:text-waffle-brown transition-colors">
+              <Link href="/dashboard" className="text-waffle-brown/70 hover:text-waffle-brown transition-colors">
                 Dashboard
               </Link>
               <Link
@@ -35,7 +35,7 @@ export default async function Navbar() {
             </>
           ) : (
             <>
-              <Link href="/login" className="hidden sm:inline-flex text-waffle-brown/70 hover:text-waffle-brown transition-colors">
+              <Link href="/login" className="text-waffle-brown/70 hover:text-waffle-brown transition-colors">
                 Sign in
               </Link>
               <Link
