@@ -6,13 +6,13 @@ export default async function Navbar() {
   const { data: { user } } = await supabase.auth.getUser();
 
   return (
-    <nav className="bg-waffle-cream px-6 py-4 sticky top-0 z-50">
+    <nav className="bg-waffle-cream px-4 sm:px-6 py-4 sticky top-0 z-50">
       <div className="max-w-6xl mx-auto flex items-center justify-between">
         <Link href="/" className="font-extrabold text-xl text-waffle-brown hover:opacity-80 tracking-tight">
           WaffleStack
         </Link>
 
-        <div className="flex items-center gap-8 text-sm font-semibold">
+        <div className="flex items-center gap-4 sm:gap-8 text-sm font-semibold">
           <div className="hidden md:flex items-center gap-8 text-waffle-brown/60">
             <Link href="/how-it-works" className="hover:text-waffle-brown transition-colors">How it Works</Link>
             <Link href="/pricing" className="hover:text-waffle-brown transition-colors">Pricing</Link>
@@ -20,7 +20,7 @@ export default async function Navbar() {
 
           {user ? (
             <>
-              <Link href="/dashboard" className="text-waffle-brown/70 hover:text-waffle-brown transition-colors">
+              <Link href="/dashboard" className="hidden sm:inline-flex text-waffle-brown/70 hover:text-waffle-brown transition-colors">
                 Dashboard
               </Link>
               <Link
@@ -35,7 +35,7 @@ export default async function Navbar() {
             </>
           ) : (
             <>
-              <Link href="/login" className="text-waffle-brown/70 hover:text-waffle-brown transition-colors">
+              <Link href="/login" className="hidden sm:inline-flex text-waffle-brown/70 hover:text-waffle-brown transition-colors">
                 Sign in
               </Link>
               <Link

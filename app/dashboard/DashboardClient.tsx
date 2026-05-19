@@ -909,7 +909,7 @@ export default function DashboardClient(props: Props) {
       )}
       {/* ── Header ── */}
       <div className="bg-waffle-cream border-b border-waffle-brown/8">
-        <div className="max-w-4xl mx-auto px-6 py-6 flex items-center justify-between">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 flex items-center justify-between gap-3">
           <div>
             <h1 className="text-xl font-extrabold text-waffle-brown">Your Digest</h1>
             <div className="flex items-center gap-2 mt-0.5">
@@ -929,9 +929,9 @@ export default function DashboardClient(props: Props) {
       </div>
 
       {/* ── Main content ── */}
-      <div className="max-w-4xl mx-auto px-6 py-8 grid md:grid-cols-[1fr_280px] gap-10 items-start">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 grid md:grid-cols-[1fr_280px] gap-6 md:gap-10 items-start">
         {/* Left: node picker */}
-        <div className="space-y-8">
+        <div className="min-w-0 space-y-6 sm:space-y-8">
           <div>
             <h2 className="text-3xl font-extrabold italic text-waffle-brown leading-tight mb-1">
               {activeSectionOrder.length === 0 ? "Build Your Stack." : "Edit Your Stack."}
@@ -1183,7 +1183,7 @@ export default function DashboardClient(props: Props) {
               <img src="/icons/reddit.png" width={14} height={14} alt="Reddit" className="rounded-full" /> Reddit Nodes
               <span className="ml-auto"><LimitBadge {...limits.subreddits} /></span>
             </h3>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {PRESET_SUBS.map((sub) => (
                 <NodeCard
                   key={sub}
@@ -1383,7 +1383,7 @@ export default function DashboardClient(props: Props) {
                           : filtered.slice(0, CURATED_FEEDS_INITIAL_COUNT);
                         return (
                           <>
-                            <div className="grid grid-cols-3 gap-1.5">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
                               {visible.map((feed) => {
                                 const alreadyAdded = stack.feeds.includes(feed.url);
                                 return (
@@ -1494,7 +1494,7 @@ export default function DashboardClient(props: Props) {
                       const defaultFeedUrl = (slug: string) => `https://${slug}.substack.com/feed`;
                       return (
                         <>
-                          <div className="grid grid-cols-3 gap-1.5">
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
                             {visible.map((item) => {
                               const url = item.feedUrl ?? defaultFeedUrl(item.slug);
                               const alreadyAdded = stack.substackFeeds.includes(url);
@@ -1918,7 +1918,7 @@ function NodeCard({
     <div
       onClick={onClick}
       className={`h-full rounded-2xl border-2 cursor-pointer transition-all select-none ${
-        compact ? "p-3" : "p-4"
+        compact ? "p-2.5 sm:p-3" : "p-3 sm:p-4"
       } ${
         active
           ? "border-waffle-orange bg-waffle-orange/5"
@@ -1927,7 +1927,7 @@ function NodeCard({
     >
       <div className="flex items-center gap-2">
         <span className={`leading-none flex-shrink-0 flex items-center ${!compact ? "text-xl" : ""}`}>{icon}</span>
-        <p className="flex-1 font-bold text-waffle-brown text-sm truncate">{label}</p>
+        <p className="flex-1 min-w-0 font-bold text-waffle-brown text-sm truncate">{label}</p>
         {active && (
           <span className="w-5 h-5 rounded-full bg-waffle-orange flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
             ✓
