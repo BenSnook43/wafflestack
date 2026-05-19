@@ -1752,11 +1752,11 @@ export default function DashboardClient(props: Props) {
 
             {hasSaved && props.emailsSent === 0 ? (
               <p className="text-xs text-green-600 font-semibold text-center">
-                ✓ Your first digest arrives tomorrow at 7 AM
+                ✓ Your first digest arrives tomorrow morning
               </p>
             ) : (
               <p className="text-xs text-waffle-brown/30 text-center">
-                Your digest is delivered at 7:00 AM
+                Your digest is delivered each morning
               </p>
             )}
             {props.emailsSent > 0 && (

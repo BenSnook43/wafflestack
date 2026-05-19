@@ -128,7 +128,7 @@ export default function HowItWorksPage() {
             <h2 className="text-2xl font-extrabold text-waffle-brown -mt-2">{STEPS[2].label}</h2>
             <p className="text-waffle-brown/55 leading-relaxed">{STEPS[2].description}</p>
             <p className="text-sm text-waffle-brown/40 italic">
-              Delivered at 7:00 AM. Change your stack any time.
+              Delivered every morning. Change your stack any time.
             </p>
           </div>
 
@@ -141,7 +141,7 @@ export default function HowItWorksPage() {
                 </div>
                 <div>
                   <p className="text-sm font-bold text-waffle-brown">WaffleStack</p>
-                  <p className="text-[11px] text-waffle-brown/40">Your morning digest — today, 7:00 AM</p>
+                  <p className="text-[11px] text-waffle-brown/40">Your morning digest — today</p>
                 </div>
               </div>
               <div className="px-5 py-4 space-y-3">

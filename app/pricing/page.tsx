@@ -2,7 +2,7 @@ import Link from "next/link";
 
 const FEATURES = [
   "Up to 15 sources — Reddit, RSS, stocks, Hacker News, weather, and more",
-  "Daily AI-written digest, delivered at 7 AM",
+  "Daily AI-written digest, delivered every morning",
   "Google Calendar & Gmail summaries (coming soon)",
   "Referral program — earn free months",
   "Cancel any time, no questions asked",

@@ -54,7 +54,7 @@ export default function SubscribePage() {
 
             <ul className="text-left space-y-2 text-sm text-waffle-brown/70">
               {[
-                "Daily AI-written digest, delivered at 7 AM",
+                "Daily AI-written digest, delivered every morning",
                 "Up to 15 sources — Reddit, RSS, stocks, Hacker News, weather",
                 "Cancel any time, no questions asked",
                 "Payments secured by Stripe — we never see your card",
