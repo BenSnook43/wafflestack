@@ -83,6 +83,29 @@ const INSPIRATION_PACKS: InspirationPack[] = [
     ],
   },
   {
+    label: "Sports",
+    emoji: "🏈",
+    sources: [
+      { type: "subreddit", value: "sports", label: "r/sports" },
+      { type: "subreddit", value: "nfl", label: "r/nfl" },
+      { type: "subreddit", value: "nba", label: "r/nba" },
+      { type: "rss", value: "https://www.espn.com/espn/rss/news", label: "ESPN — Top Headlines" },
+      { type: "rss", value: "https://www.espn.com/espn/rss/nfl/news", label: "ESPN — NFL" },
+      { type: "rss", value: "https://feeds.bbci.co.uk/sport/football/rss.xml", label: "BBC Football (Soccer)" },
+    ],
+  },
+  {
+    label: "Politics",
+    emoji: "🏛️",
+    sources: [
+      { type: "subreddit", value: "politics", label: "r/politics" },
+      { type: "subreddit", value: "geopolitics", label: "r/geopolitics" },
+      { type: "rss", value: "https://feeds.npr.org/1014/rss.xml", label: "NPR Politics" },
+      { type: "rss", value: "https://feeds.bbci.co.uk/news/politics/rss.xml", label: "BBC Politics" },
+      { type: "rss", value: "https://thehill.com/feed/", label: "The Hill" },
+    ],
+  },
+  {
     label: "Design",
     emoji: "🎨",
     sources: [
@@ -196,9 +219,30 @@ const CURATED_FEEDS: CuratedFeed[] = [
   { name: "Eurogamer",          url: "https://www.eurogamer.net/feed",                                                                     domain: "eurogamer.net",        description: "Game reviews, news, and guides",               category: "Gaming" },
   { name: "PC Gamer",           url: "https://www.pcgamer.com/rss/",                                                                       domain: "pcgamer.com",          description: "PC gaming features and hardware reviews",      category: "Gaming" },
   { name: "Kotaku",             url: "https://kotaku.com/rss",                                                                             domain: "kotaku.com",           description: "Gaming culture, reviews, and commentary",      category: "Gaming" },
+  // Sports
+  { name: "ESPN — Top Headlines",    url: "https://www.espn.com/espn/rss/news",                  domain: "espn.com",        description: "Top sports headlines across every league",        category: "Sports" },
+  { name: "ESPN — NFL",              url: "https://www.espn.com/espn/rss/nfl/news",              domain: "espn.com",        description: "NFL news, scores, and analysis",                  category: "Sports" },
+  { name: "ESPN — NBA",              url: "https://www.espn.com/espn/rss/nba/news",              domain: "espn.com",        description: "NBA news, scores, and analysis",                  category: "Sports" },
+  { name: "ESPN — NHL",              url: "https://www.espn.com/espn/rss/nhl/news",              domain: "espn.com",        description: "NHL news, scores, and analysis",                  category: "Sports" },
+  { name: "ESPN — MLB",              url: "https://www.espn.com/espn/rss/mlb/news",              domain: "espn.com",        description: "MLB news, scores, and analysis",                  category: "Sports" },
+  { name: "ESPN — College Football", url: "https://www.espn.com/espn/rss/ncf/news",              domain: "espn.com",        description: "NCAA college football coverage",                  category: "Sports" },
+  { name: "ESPN — Soccer",           url: "https://www.espn.com/espn/rss/soccer/news",           domain: "espn.com",        description: "Global soccer news and analysis",                 category: "Sports" },
+  { name: "BBC Sport",               url: "https://feeds.bbci.co.uk/sport/rss.xml",              domain: "bbc.co.uk",       description: "Top sports stories from BBC Sport",               category: "Sports" },
+  { name: "BBC Football (Soccer)",   url: "https://feeds.bbci.co.uk/sport/football/rss.xml",     domain: "bbc.co.uk",       description: "Football (soccer) news from BBC Sport",           category: "Sports" },
+  { name: "Yahoo Sports",            url: "https://sports.yahoo.com/rss/",                       domain: "yahoo.com",       description: "Sports news and recaps across all leagues",       category: "Sports" },
+  { name: "CBS Sports",              url: "https://www.cbssports.com/rss/headlines/",            domain: "cbssports.com",   description: "Headlines, scores, and analysis from CBS Sports", category: "Sports" },
+  // Politics
+  { name: "NPR Politics",            url: "https://feeds.npr.org/1014/rss.xml",                  domain: "npr.org",         description: "U.S. politics coverage from NPR",                 category: "Politics" },
+  { name: "BBC Politics",            url: "https://feeds.bbci.co.uk/news/politics/rss.xml",      domain: "bbc.co.uk",       description: "UK and world politics from BBC News",             category: "Politics" },
+  { name: "The Hill",                url: "https://thehill.com/feed/",                           domain: "thehill.com",     description: "U.S. political news from Capitol Hill",           category: "Politics" },
+  { name: "Guardian — US Politics",  url: "https://www.theguardian.com/us-news/us-politics/rss", domain: "theguardian.com", description: "U.S. politics from The Guardian",                 category: "Politics" },
+  { name: "Politico",                url: "https://www.politico.com/rss/politicopicks.xml",      domain: "politico.com",    description: "Politics, policy, and power",                     category: "Politics" },
+  // World News (additions)
+  { name: "France 24",               url: "https://www.france24.com/en/rss",                     domain: "france24.com",    description: "International news from a French perspective",    category: "World News" },
+  { name: "DW World",                url: "https://rss.dw.com/rdf/rss-en-world",                 domain: "dw.com",          description: "World news from Deutsche Welle",                  category: "World News" },
 ];
 
-const CURATED_CATEGORIES = ["All", "Tech", "Investing", "World News", "Design", "Science", "Crypto", "Health", "Gaming"];
+const CURATED_CATEGORIES = ["All", "Tech", "Investing", "World News", "Politics", "Sports", "Design", "Science", "Crypto", "Health", "Gaming"];
 
 const CURATED_FEEDS_INITIAL_COUNT = 6;
 
@@ -220,6 +264,8 @@ const CATEGORY_EMOJI: Record<string, string> = {
   "Tech": "💻",
   "Investing": "📈",
   "World News": "🌍",
+  "Politics": "🏛️",
+  "Sports": "🏈",
   "Design": "🎨",
   "Science": "🔬",
   "Crypto": "₿",
@@ -930,16 +976,16 @@ export default function DashboardClient(props: Props) {
 
       {/* ── Main content ── */}
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 grid md:grid-cols-[1fr_280px] gap-6 md:gap-10 items-start">
-        {/* Left: node picker */}
+        {/* Left: source picker */}
         <div className="min-w-0 space-y-6 sm:space-y-8">
           <div>
             <h2 className="text-3xl font-extrabold italic text-waffle-brown leading-tight mb-1">
-              {activeSectionOrder.length === 0 ? "Build Your Stack." : "Edit Your Stack."}
+              {activeSectionOrder.length === 0 ? "Build Your Digest." : "Edit Your Digest."}
             </h2>
             <p className="text-waffle-brown/55 text-sm">
               {activeSectionOrder.length === 0
                 ? "Pick sources below, or tap ✨ Get Inspired for curated starter packs."
-                : "Toggle nodes on or off. Changes are saved when you hit Save."}
+                : "Add or remove sources below. Changes are saved when you hit Save."}
             </p>
           </div>
 
@@ -949,7 +995,7 @@ export default function DashboardClient(props: Props) {
               <div className="space-y-2">
                 <p className="font-bold text-waffle-brown">Welcome to WaffleStack!</p>
                 <p className="text-sm text-waffle-brown/65 leading-relaxed">
-                  Your digest is empty. Toggle a source below to get started, or use{" "}
+                  Your digest is empty. Add a source below to get started, or use{" "}
                   <button
                     onClick={() => setInspiredOpen(true)}
                     className="text-waffle-orange font-semibold underline underline-offset-2 hover:no-underline"
@@ -1177,10 +1223,10 @@ export default function DashboardClient(props: Props) {
             />
           </section>
 
-          {/* Reddit Nodes */}
+          {/* Reddit sources */}
           <section className="space-y-3">
             <h3 className="text-xs font-bold text-waffle-brown/40 uppercase tracking-widest flex items-center gap-2">
-              <img src="/icons/reddit.png" width={14} height={14} alt="Reddit" className="rounded-full" /> Reddit Nodes
+              <img src="/icons/reddit.png" width={14} height={14} alt="Reddit" className="rounded-full" /> Reddit Sources
               <span className="ml-auto"><LimitBadge {...limits.subreddits} /></span>
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1622,15 +1668,15 @@ export default function DashboardClient(props: Props) {
           </section>
         </div>
 
-        {/* Right: Your Stack sidebar */}
+        {/* Right: digest summary sidebar */}
         <aside className="hidden md:block sticky top-8">
           <div className="bg-white rounded-2xl border border-waffle-brown/10 p-6 space-y-4 shadow-sm">
             <h3 className="font-extrabold text-waffle-brown text-lg flex items-center gap-2">
-              Your Stack <span>🥞</span>
+              Your Digest <span>🥞</span>
             </h3>
             {activeSectionOrder.length === 0 ? (
               <div className="border-2 border-dashed border-waffle-brown/10 rounded-xl px-4 py-8 text-center text-waffle-brown/25 text-sm">
-                Pick some nodes to build your digest…
+                Pick some sources to build your digest…
               </div>
             ) : (
               <ul className="space-y-2">
@@ -1744,7 +1790,7 @@ export default function DashboardClient(props: Props) {
               disabled={saveStatus === "loading"}
               className={`w-full bg-waffle-orange hover:bg-waffle-orange/90 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-colors text-sm ${isDirty ? "ring-2 ring-waffle-orange ring-offset-2" : ""}`}
             >
-              {saveStatus === "loading" ? "Saving…" : saveStatus === "saved" ? "Saved ✓" : isDirty ? "Save Changes →" : "Save Stack"}
+              {saveStatus === "loading" ? "Saving…" : saveStatus === "saved" ? "Saved ✓" : isDirty ? "Save Changes →" : "Save Digest"}
             </button>
             {saveStatus === "error" && (
               <p className="text-xs text-red-600 text-center">Failed to save. Try again.</p>
@@ -1776,14 +1822,14 @@ export default function DashboardClient(props: Props) {
           </div>
         </aside>
 
-        {/* Mobile save button (below the nodes) */}
+        {/* Mobile save button (below the sources) */}
         <div className="md:hidden space-y-3">
           <button
             onClick={handleSave}
             disabled={saveStatus === "loading"}
             className={`w-full bg-waffle-orange hover:bg-waffle-orange/90 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl transition-colors ${isDirty ? "ring-2 ring-waffle-orange ring-offset-2" : ""}`}
           >
-            {saveStatus === "loading" ? "Saving…" : saveStatus === "saved" ? "Saved ✓" : isDirty ? "Save Changes →" : "Save Stack"}
+            {saveStatus === "loading" ? "Saving…" : saveStatus === "saved" ? "Saved ✓" : isDirty ? "Save Changes →" : "Save Digest"}
           </button>
           {saveStatus === "error" && (
             <p className="text-xs text-red-600 text-center">Failed to save. Try again.</p>
@@ -1813,7 +1859,7 @@ export default function DashboardClient(props: Props) {
             <div className="flex items-center justify-between px-5 py-4 border-b border-waffle-brown/10 flex-shrink-0">
               <div>
                 <p className="font-extrabold text-waffle-brown text-base">✨ Inspiration</p>
-                <p className="text-xs text-waffle-brown/40 mt-0.5">Tap any source to add it to your stack</p>
+                <p className="text-xs text-waffle-brown/40 mt-0.5">Tap any source to add it to your digest</p>
               </div>
               <button
                 onClick={() => setInspiredOpen(false)}

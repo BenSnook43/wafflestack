@@ -6,7 +6,7 @@ export const SOURCE_LIMITS = {
   subreddits: 8,
   stocks: 8,
   crypto: 8,
-  rss: 5,
+  rss: 10,
   substack: 5,
 } as const;
 
