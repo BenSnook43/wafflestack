@@ -111,7 +111,7 @@ export default async function DashboardPage({
 
   const { data: prefs } = await supabase
     .from("preferences")
-    .select("location, subreddits, stocks, crypto, rss_feeds, hacker_news, section_order")
+    .select("location, subreddits, stocks, crypto, rss_feeds, hacker_news, section_order, settings")
     .eq("user_id", userRecord?.id)
     .single();
 
@@ -125,11 +125,26 @@ export default async function DashboardPage({
     section_order: prefs?.section_order,
   });
 
+  // Topic associations for custom feeds and subreddits live in settings jsonb.
+  // Curated sources derive their topic from CURATED_FEEDS.category etc., so only
+  // user-added customs need persistence.
+  const rawSettings = (prefs?.settings ?? {}) as Record<string, unknown>;
+  const feedTopics =
+    rawSettings.feed_topics && typeof rawSettings.feed_topics === "object"
+      ? (rawSettings.feed_topics as Record<string, string>)
+      : {};
+  const subredditTopics =
+    rawSettings.subreddit_topics && typeof rawSettings.subreddit_topics === "object"
+      ? (rawSettings.subreddit_topics as Record<string, string>)
+      : {};
+
   return (
     <DashboardClient
       email={user.email!}
       userId={userRecord?.id ?? ""}
       blocks={blocks}
+      feedTopics={feedTopics}
+      subredditTopics={subredditTopics}
       trialEndsAt={userRecord?.trial_ends_at ?? null}
       subscriptionStatus={userRecord?.subscription_status ?? "trialing"}
       emailsSent={userRecord?.emails_sent ?? 0}

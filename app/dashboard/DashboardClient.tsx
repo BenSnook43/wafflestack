@@ -2,6 +2,14 @@
 
 import { useState, useRef, useEffect } from "react";
 import { SOURCE_LIMITS } from "@/lib/source-limits";
+import {
+  TOPIC_IDS,
+  TOPIC_META,
+  type TopicId,
+  rssCategoryToTopic,
+  substackCategoryToTopic,
+  PRESET_SUBREDDIT_TOPICS,
+} from "@/lib/topics";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -23,6 +31,8 @@ interface Props {
   email: string;
   userId: string;
   blocks: Block[];
+  feedTopics: Record<string, string>;
+  subredditTopics: Record<string, string>;
   trialEndsAt: string | null;
   subscriptionStatus: string;
   emailsSent: number;
@@ -492,7 +502,11 @@ function uid() {
 
 const DEFAULT_SECTION_ORDER = ["weather", "stocks", "crypto", "reddit", "hacker_news", "rss", "substack"];
 
-function blocksToState(blocks: Block[]) {
+function blocksToState(
+  blocks: Block[],
+  feedTopics: Record<string, string> = {},
+  subredditTopics: Record<string, string> = {},
+) {
   const weather = blocks.find((b) => b.type === "weather");
   const stocks = blocks.find((b) => b.type === "stocks");
   const crypto = blocks.find((b) => b.type === "crypto");
@@ -518,24 +532,30 @@ function blocksToState(blocks: Block[]) {
     crypto: !!crypto,
     cryptoCoins: crypto?.config.coins?.join(", ") ?? "",
     subreddits: reddit?.config.subreddits ?? [],
-    customSub: "",
     hackerNews,
-    rss: genericFeeds.length > 0,
     feeds: genericFeeds,
-    customFeed: "",
     substackFeeds,
     sectionOrder,
+    // Topic associations for user-added customs. Curated sources derive their
+    // topic from CURATED_FEEDS.category / CURATED_SUBSTACKS.category at render
+    // time, so they don't need an entry here.
+    feedTopics: { ...feedTopics },
+    subredditTopics: { ...subredditTopics },
   };
 }
 
 type StackState = ReturnType<typeof blocksToState>;
 
-function mergeSourceIntoStack(state: StackState, src: InspirationSource): StackState {
+function mergeSourceIntoStack(state: StackState, src: InspirationSource, topic?: TopicId): StackState {
   switch (src.type) {
     case "subreddit": {
       if (state.subreddits.map((r) => r.toLowerCase()).includes(src.value.toLowerCase())) return state;
       if (state.subreddits.length >= SOURCE_LIMITS.subreddits) return state;
-      return { ...state, subreddits: [...state.subreddits, src.value] };
+      return {
+        ...state,
+        subreddits: [...state.subreddits, src.value],
+        subredditTopics: topic ? { ...state.subredditTopics, [src.value]: topic } : state.subredditTopics,
+      };
     }
     case "hacker_news":
       return { ...state, hackerNews: true };
@@ -558,19 +578,36 @@ function mergeSourceIntoStack(state: StackState, src: InspirationSource): StackS
     case "rss":
       if (state.feeds.includes(src.value)) return state;
       if (state.feeds.length >= SOURCE_LIMITS.rss) return state;
-      return { ...state, rss: true, feeds: [...state.feeds, src.value] };
+      return {
+        ...state,
+        feeds: [...state.feeds, src.value],
+        feedTopics: topic ? { ...state.feedTopics, [src.value]: topic } : state.feedTopics,
+      };
     case "weather":
       return { ...state, weather: true };
   }
 }
+
+// Maps wizard pack ids to the topic block any non-curated sources should appear
+// under. Curated sources (Ars Technica, NPR Politics, etc.) already derive their
+// topic from CURATED_FEEDS.category; this map covers the gap for sources like
+// r/MachineLearning or PBS NewsHour Politics that ship in a pack but aren't curated.
+const ONBOARDING_PACK_TOPIC: Record<string, TopicId> = {
+  tech_ai:     "tech",
+  investing:   "investing",
+  us_politics: "politics",
+  world_news:  "world-news",
+  sports:      "sports",
+};
 
 function applyOnboardingPack(state: StackState, packIds: string[]): StackState {
   let next = { ...state };
   for (const packId of packIds) {
     const pack = ONBOARDING_PACKS.find((p) => p.id === packId);
     if (!pack) continue;
+    const topic = ONBOARDING_PACK_TOPIC[packId];
     for (const src of pack.sources) {
-      next = mergeSourceIntoStack(next, src);
+      next = mergeSourceIntoStack(next, src, topic);
     }
   }
   return next;
@@ -607,6 +644,18 @@ function stateToSavePayload(state: StackState) {
     return false;
   });
 
+  // Drop stale topic associations whose underlying feed/subreddit was removed.
+  const allFeedUrls = new Set([...state.feeds, ...state.substackFeeds]);
+  const feedTopics: Record<string, string> = {};
+  for (const [url, topic] of Object.entries(state.feedTopics)) {
+    if (allFeedUrls.has(url)) feedTopics[url] = topic;
+  }
+  const subSet = new Set(state.subreddits);
+  const subredditTopics: Record<string, string> = {};
+  for (const [name, topic] of Object.entries(state.subredditTopics)) {
+    if (subSet.has(name)) subredditTopics[name] = topic;
+  }
+
   return {
     location: state.weather ? state.weatherCity || null : null,
     subreddits: state.subreddits,
@@ -619,6 +668,7 @@ function stateToSavePayload(state: StackState) {
     rss_feeds: [...state.feeds, ...state.substackFeeds],
     hacker_news: state.hackerNews,
     section_order: sectionOrder,
+    settings: { feed_topics: feedTopics, subreddit_topics: subredditTopics },
   };
 }
 
@@ -645,6 +695,299 @@ function isInStack(src: InspirationSource, s: StackState): boolean {
   }
 }
 
+// ── Per-topic adders ─────────────────────────────────────────────────────────
+// Multiple instances of these live on the page at once (one per topic block plus
+// Custom/Other), so each owns its own input + validation state rather than sharing
+// module-level state.
+
+function CustomFeedChip({ url, onRemove }: { url: string; onRemove: () => void }) {
+  const slugMatch = url.match(/^https?:\/\/([^.]+)\.substack\.com/);
+  const isSubstack = !!slugMatch;
+  const label = isSubstack
+    ? slugMatch![1]
+    : (() => {
+        try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url; }
+      })();
+  const domain = (() => { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return ""; } })();
+  return (
+    <span className="flex items-center gap-1.5 bg-waffle-pale rounded-lg px-2 py-1 text-xs text-waffle-brown/70 max-w-[180px]">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={`https://www.google.com/s2/favicons?domain=${domain}&sz=16`}
+        width={12}
+        height={12}
+        alt=""
+        className="flex-shrink-0 rounded-sm"
+      />
+      <span className="truncate font-medium">{label}</span>
+      <button
+        onClick={onRemove}
+        className="text-waffle-brown/30 hover:text-red-500 transition-colors flex-shrink-0 leading-none"
+        aria-label={`Remove ${label}`}
+      >
+        ×
+      </button>
+    </span>
+  );
+}
+
+function RssAdder({ onAdd, disabled }: { onAdd: (url: string) => void; disabled: boolean }) {
+  const [value, setValue] = useState("");
+  const [validation, setValidation] = useState<{ status: "idle" | "loading" | "valid" | "invalid"; feedUrl?: string; title?: string }>({ status: "idle" });
+  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => { if (debounce.current) clearTimeout(debounce.current); }, []);
+
+  function onChange(v: string) {
+    setValue(v);
+    if (debounce.current) clearTimeout(debounce.current);
+    if (!v.trim()) { setValidation({ status: "idle" }); return; }
+    setValidation({ status: "idle" });
+    debounce.current = setTimeout(async () => {
+      const trimmed = v.trim();
+      if (!trimmed.includes(".")) return;
+      setValidation({ status: "loading" });
+      try {
+        const res = await fetch(`/api/validate-feed?url=${encodeURIComponent(trimmed)}`);
+        const data = await res.json();
+        setValidation(data.valid
+          ? { status: "valid", feedUrl: data.feedUrl, title: data.title }
+          : { status: "invalid" });
+      } catch {
+        setValidation({ status: "invalid" });
+      }
+    }, 400);
+  }
+
+  function submit() {
+    if (validation.status !== "valid" || !validation.feedUrl) return;
+    onAdd(validation.feedUrl);
+    setValue("");
+    setValidation({ status: "idle" });
+  }
+
+  if (disabled) {
+    return (
+      <p className="text-[11px] text-waffle-orange/80 px-1">
+        Feed limit reached. Remove one to add another.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-1.5">
+        <div className="relative flex-1">
+          <input
+            type="url"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && submit()}
+            placeholder="Paste a feed or website URL…"
+            className="w-full border border-waffle-brown/15 rounded-xl px-3 py-2 text-xs text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:ring-2 focus:ring-waffle-orange bg-white pr-7"
+          />
+          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
+            {validation.status === "loading" && (
+              <svg className="animate-spin w-3.5 h-3.5 text-waffle-brown/40" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+              </svg>
+            )}
+            {validation.status === "valid" && <span className="text-green-500 text-xs font-bold">✓</span>}
+            {validation.status === "invalid" && <span className="text-red-400 text-xs font-bold">✕</span>}
+          </span>
+        </div>
+        {validation.status === "valid" && (
+          <button
+            onClick={submit}
+            className="px-3 py-2 bg-waffle-orange text-white text-xs font-semibold rounded-xl hover:bg-waffle-orange/90 transition-colors flex-shrink-0"
+          >
+            Add
+          </button>
+        )}
+      </div>
+      {validation.status === "valid" && (
+        <p className="text-[11px] text-green-600 px-1 truncate">
+          Feed found{validation.title ? `: ${validation.title}` : ""}
+        </p>
+      )}
+      {validation.status === "invalid" && (
+        <p className="text-[11px] text-red-500 px-1">No RSS feed found at this URL</p>
+      )}
+    </div>
+  );
+}
+
+function SubstackAdder({
+  onAdd,
+  disabled,
+}: {
+  onAdd: (slug: string) => Promise<"ok" | "invalid" | "duplicate" | "full">;
+  disabled: boolean;
+}) {
+  const [value, setValue] = useState("");
+  const [status, setStatus] = useState<"idle" | "checking" | "invalid">("idle");
+
+  async function submit() {
+    const raw = value.trim();
+    if (!raw) return;
+    setStatus("checking");
+    const result = await onAdd(raw);
+    if (result === "ok" || result === "duplicate") {
+      setValue("");
+      setStatus("idle");
+    } else if (result === "invalid") {
+      setStatus("invalid");
+    } else {
+      // "full" — surface as a disabled state via the parent on next render
+      setStatus("idle");
+    }
+  }
+
+  if (disabled) {
+    return (
+      <p className="text-[11px] text-waffle-orange/80 px-0.5">
+        Newsletter limit reached. Remove one to add another.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-1">
+      <div className="flex gap-1.5">
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => { setValue(e.target.value); if (status === "invalid") setStatus("idle"); }}
+          onKeyDown={(e) => e.key === "Enter" && submit()}
+          disabled={status === "checking"}
+          placeholder="Add a Substack by slug (e.g. paulgraham)"
+          className="flex-1 border-b border-waffle-brown/20 bg-transparent text-xs text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:border-waffle-orange py-1 disabled:opacity-50"
+        />
+        <button
+          onClick={submit}
+          disabled={status === "checking"}
+          className="text-xs font-semibold text-waffle-orange disabled:opacity-50"
+        >
+          {status === "checking" ? "Checking…" : "Add"}
+        </button>
+      </div>
+      {status === "invalid" && (
+        <p className="text-[11px] text-red-500 px-0.5">
+          No Substack found at {value.trim().toLowerCase().replace(/^https?:\/\//, "").split(".")[0]}.substack.com
+        </p>
+      )}
+    </div>
+  );
+}
+
+function SubredditAdder({
+  onAdd,
+  disabled,
+}: {
+  onAdd: (name: string) => Promise<"ok" | "invalid" | "duplicate" | "full">;
+  disabled: boolean;
+}) {
+  const [value, setValue] = useState("");
+  const [status, setStatus] = useState<"idle" | "checking" | "invalid">("idle");
+
+  async function submit() {
+    const cleaned = value.trim().toLowerCase().replace(/^r\//, "");
+    if (!cleaned) return;
+    setStatus("checking");
+    const result = await onAdd(cleaned);
+    if (result === "ok" || result === "duplicate") {
+      setValue("");
+      setStatus("idle");
+    } else if (result === "invalid") {
+      setStatus("invalid");
+    } else {
+      setStatus("idle");
+    }
+  }
+
+  if (disabled) {
+    return (
+      <p className="text-[11px] text-waffle-orange/80 px-1">
+        Subreddit limit reached. Remove one to add another.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-1">
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => { setValue(e.target.value); if (status === "invalid") setStatus("idle"); }}
+          onKeyDown={(e) => e.key === "Enter" && submit()}
+          disabled={status === "checking"}
+          placeholder="+ Add subreddit (e.g. r/machinelearning)"
+          className="flex-1 border border-waffle-brown/15 rounded-xl px-3 py-2 text-xs bg-white text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:ring-2 focus:ring-waffle-orange disabled:opacity-50"
+        />
+        <button
+          type="button"
+          onClick={submit}
+          disabled={status === "checking"}
+          className="px-3 py-2 bg-waffle-pale rounded-xl text-waffle-brown font-semibold text-xs hover:bg-waffle-golden/30 transition-colors disabled:opacity-50"
+        >
+          {status === "checking" ? "Checking…" : "Add"}
+        </button>
+      </div>
+      {status === "invalid" && (
+        <p className="text-[11px] text-red-500 px-1">
+          r/{value.trim().toLowerCase().replace(/^r\//, "")} doesn&apos;t exist on Reddit
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ── Topic block (presentational) ─────────────────────────────────────────────
+
+function TopicCard({
+  topic,
+  open,
+  count,
+  onToggle,
+  children,
+}: {
+  topic: TopicId;
+  open: boolean;
+  count: number;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  const meta = TOPIC_META[topic];
+  const active = count > 0;
+  return (
+    <div
+      className={`rounded-2xl border transition-colors ${
+        active
+          ? "border-waffle-orange/30 bg-waffle-orange/5"
+          : "border-waffle-brown/10 bg-white"
+      }`}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center gap-3 px-4 py-3 text-left"
+      >
+        <span className="text-lg leading-none">{meta.emoji}</span>
+        <span className="flex-1 font-semibold text-sm text-waffle-brown">{meta.label}</span>
+        {count > 0 && (
+          <span className="text-[10px] font-bold bg-waffle-orange/15 text-waffle-orange px-1.5 py-0.5 rounded-md tabular-nums">
+            {count} source{count !== 1 ? "s" : ""}
+          </span>
+        )}
+        <span className="text-waffle-brown/30 text-xs">{open ? "▾" : "▸"}</span>
+      </button>
+      {open && <div className="px-4 pb-4 space-y-4">{children}</div>}
+    </div>
+  );
+}
+
 // ── Source limit badge ───────────────────────────────────────────────────────
 
 function LimitBadge({ count, max, full }: { count: number; max: number; full: boolean }) {
@@ -663,14 +1006,13 @@ function LimitBadge({ count, max, full }: { count: number; max: number; full: bo
 // ── Main component ───────────────────────────────────────────────────────────
 
 export default function DashboardClient(props: Props) {
-  const [stack, setStack] = useState<StackState>(() => blocksToState(props.blocks));
+  const [stack, setStack] = useState<StackState>(() =>
+    blocksToState(props.blocks, props.feedTopics, props.subredditTopics),
+  );
   const [saveStatus, setSaveStatus] = useState<"idle" | "loading" | "saved" | "error">("idle");
   const [isDirty, setIsDirty] = useState(false);
   const [hasSaved, setHasSaved] = useState(props.emailsSent > 0);
   const lastSavedStack = useRef<StackState>(stack);
-  const [subCheck, setSubCheck] = useState<"idle" | "checking" | "invalid">("idle");
-  const [substackInput, setSubstackInput] = useState("");
-  const [substackCheck, setSubstackCheck] = useState<"idle" | "checking" | "invalid">("idle");
   const [inspiredOpen, setInspiredOpen] = useState(false);
   const [tickerQuery, setTickerQuery] = useState("");
   const [tickerResults, setTickerResults] = useState<{ symbol: string; description: string }[]>([]);
@@ -679,7 +1021,9 @@ export default function DashboardClient(props: Props) {
   const [tickerError, setTickerError] = useState(false);
   const tickerDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tickerInputRef = useRef<HTMLInputElement>(null);
-  const [cityQuery, setCityQuery] = useState(() => blocksToState(props.blocks).weatherCity);
+  const [cityQuery, setCityQuery] = useState(
+    () => blocksToState(props.blocks, props.feedTopics, props.subredditTopics).weatherCity,
+  );
   const [cityResults, setCityResults] = useState<{ name: string; state?: string; country: string; label: string }[]>([]);
   const [cityDropdownOpen, setCityDropdownOpen] = useState(false);
   const cityDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -687,20 +1031,13 @@ export default function DashboardClient(props: Props) {
   const dragKey = useRef<string | null>(null);
   const dragPosition = useRef<"before" | "after" | null>(null);
   const [dragOver, setDragOver] = useState<{ key: string; position: "before" | "after" } | null>(null);
-  const [feedValidation, setFeedValidation] = useState<{
-    status: "idle" | "loading" | "valid" | "invalid";
-    feedUrl?: string;
-    title?: string;
-  }>({ status: "idle" });
-  const [curatedCategory, setCuratedCategory] = useState<string>("All");
-  const [showAllCuratedFeeds, setShowAllCuratedFeeds] = useState(false);
-  const [substackCategory, setSubstackCategory] = useState<string>("All");
-  const [showAllSubstacks, setShowAllSubstacks] = useState(false);
+  // Expand state per topic block. Each topic id maps to true when its card is
+  // open. The Custom/Other block uses the special key "__other".
+  const [openTopics, setOpenTopics] = useState<Record<string, boolean>>({});
   const [setupOpen, setSetupOpen] = useState(props.blocks.length === 0);
   const [setupDismissed, setSetupDismissed] = useState(false);
   const [setupStep, setSetupStep] = useState<1 | 2 | 3>(1);
   const [selectedOnboardingPacks, setSelectedOnboardingPacks] = useState<string[]>([]);
-  const feedDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function toggleSub(sub: string) {
     setStack((s) => {
@@ -712,57 +1049,70 @@ export default function DashboardClient(props: Props) {
     });
   }
 
-  async function addCustomSub() {
-    const cleaned = stack.customSub.trim().toLowerCase().replace(/^r\//, "");
-    if (!cleaned || stack.subreddits.includes(cleaned)) return;
-    if (stack.subreddits.length >= SOURCE_LIMITS.subreddits) return;
+  // Validates a Substack slug or full URL and adds the resulting feed URL to the
+  // stack, optionally tagging it with a topic. Returns "ok" | "invalid" | "duplicate"
+  // so per-topic SubstackAdder components can surface their own validation state.
+  async function addSubredditByName(raw: string, topic?: TopicId): Promise<"ok" | "invalid" | "duplicate" | "full"> {
+    const cleaned = raw.trim().toLowerCase().replace(/^r\//, "");
+    if (!cleaned) return "invalid";
+    if (stack.subreddits.includes(cleaned)) return "duplicate";
+    if (stack.subreddits.length >= SOURCE_LIMITS.subreddits) return "full";
 
-    setSubCheck("checking");
     try {
       const res = await fetch(`/api/validate-subreddit?name=${encodeURIComponent(cleaned)}`);
       const data = await res.json();
       if (data.exists) {
         const name = data.canonical ?? cleaned;
-        setStack((s) => ({ ...s, subreddits: [...s.subreddits, name], customSub: "" }));
-        setSubCheck("idle");
-      } else {
-        setSubCheck("invalid");
+        setStack((s) => ({
+          ...s,
+          subreddits: [...s.subreddits, name],
+          subredditTopics: topic ? { ...s.subredditTopics, [name]: topic } : s.subredditTopics,
+        }));
+        return "ok";
       }
+      return "invalid";
     } catch {
-      // Network error — allow adding anyway, server will validate on save
-      setStack((s) => ({ ...s, subreddits: [...s.subreddits, cleaned], customSub: "" }));
-      setSubCheck("idle");
+      // Fail open on network error
+      setStack((s) => ({
+        ...s,
+        subreddits: [...s.subreddits, cleaned],
+        subredditTopics: topic ? { ...s.subredditTopics, [cleaned]: topic } : s.subredditTopics,
+      }));
+      return "ok";
     }
   }
 
-  async function addSubstack() {
-    const raw = substackInput.trim();
-    if (!raw) return;
+  function removeSubreddit(name: string) {
+    setStack((s) => {
+      const { [name]: _dropped, ...remaining } = s.subredditTopics;
+      void _dropped;
+      return { ...s, subreddits: s.subreddits.filter((r) => r !== name), subredditTopics: remaining };
+    });
+  }
 
-    // Strip full URL to slug, accept bare slug
-    const urlMatch = raw.match(/^https?:\/\/([^.]+)\.substack\.com/i);
-    const slug = urlMatch ? urlMatch[1].toLowerCase() : raw.toLowerCase();
+  async function addSubstackBySlug(raw: string, topic?: TopicId): Promise<"ok" | "invalid" | "duplicate" | "full"> {
+    const cleaned = raw.trim();
+    if (!cleaned) return "invalid";
+
+    const urlMatch = cleaned.match(/^https?:\/\/([^.]+)\.substack\.com/i);
+    const slug = urlMatch ? urlMatch[1].toLowerCase() : cleaned.toLowerCase();
     const feedUrl = `https://${slug}.substack.com/feed`;
 
-    if (stack.substackFeeds.includes(feedUrl)) return;
-    if (stack.substackFeeds.length >= SOURCE_LIMITS.substack) return;
+    if (stack.substackFeeds.includes(feedUrl)) return "duplicate";
+    if (stack.substackFeeds.length >= SOURCE_LIMITS.substack) return "full";
 
-    setSubstackCheck("checking");
     try {
       const res = await fetch(`/api/validate-substack?slug=${encodeURIComponent(slug)}`);
       const data = await res.json();
       if (data.valid) {
-        setStack((s) => ({ ...s, substackFeeds: [...s.substackFeeds, data.url] }));
-        setSubstackInput("");
-        setSubstackCheck("idle");
-      } else {
-        setSubstackCheck("invalid");
+        addSubstackByUrl(data.url, topic);
+        return "ok";
       }
+      return "invalid";
     } catch {
-      // Fail open on network error
-      setStack((s) => ({ ...s, substackFeeds: [...s.substackFeeds, feedUrl] }));
-      setSubstackInput("");
-      setSubstackCheck("idle");
+      // Fail open on network error — server still validates on save
+      addSubstackByUrl(feedUrl, topic);
+      return "ok";
     }
   }
 
@@ -926,7 +1276,7 @@ export default function DashboardClient(props: Props) {
         case "crypto": return { ...s, crypto: false, cryptoCoins: "" };
         case "reddit": return { ...s, subreddits: [] };
         case "hacker_news": return { ...s, hackerNews: false };
-        case "rss": return { ...s, rss: false, feeds: [] };
+        case "rss": return { ...s, feeds: [] };
         case "substack": return { ...s, substackFeeds: [] };
         default: return s;
       }
@@ -936,7 +1286,6 @@ export default function DashboardClient(props: Props) {
   // Clean up debounces on unmount
   useEffect(() => () => {
     if (tickerDebounce.current) clearTimeout(tickerDebounce.current);
-    if (feedDebounce.current) clearTimeout(feedDebounce.current);
     if (cityDebounce.current) clearTimeout(cityDebounce.current);
   }, []);
 
@@ -947,52 +1296,51 @@ export default function DashboardClient(props: Props) {
     setIsDirty(dirty);
   }, [stack]);
 
-  function addValidatedFeed() {
-    const url = feedValidation.feedUrl;
+  // If `topic` is provided, the feed is tagged with that topic via settings.feed_topics
+  // so it surfaces inside the matching topic block on reload. Curated feeds derive
+  // their topic from CURATED_FEEDS.category and don't need a topic argument.
+  function addFeedUrl(url: string, topic?: TopicId) {
     if (!url || stack.feeds.includes(url)) return;
     if (stack.feeds.length >= SOURCE_LIMITS.rss) return;
-    setStack((s) => ({ ...s, feeds: [...s.feeds, url], customFeed: "" }));
-    setFeedValidation({ status: "idle" });
+    setStack((s) => ({
+      ...s,
+      feeds: [...s.feeds, url],
+      feedTopics: topic ? { ...s.feedTopics, [url]: topic } : s.feedTopics,
+    }));
   }
 
-  function addFeedUrl(url: string) {
-    if (!url || stack.feeds.includes(url)) return;
-    if (stack.feeds.length >= SOURCE_LIMITS.rss) return;
-    setStack((s) => ({ ...s, feeds: [...s.feeds, url] }));
+  function removeFeedUrl(url: string) {
+    setStack((s) => {
+      const { [url]: _dropped, ...remaining } = s.feedTopics;
+      void _dropped;
+      return { ...s, feeds: s.feeds.filter((f) => f !== url), feedTopics: remaining };
+    });
   }
 
-  function handleFeedInputChange(value: string) {
-    setStack((s) => ({ ...s, customFeed: value }));
-    if (feedDebounce.current) clearTimeout(feedDebounce.current);
-    if (!value.trim()) {
-      setFeedValidation({ status: "idle" });
-      return;
-    }
-    setFeedValidation({ status: "idle" });
-    feedDebounce.current = setTimeout(async () => {
-      const trimmed = value.trim();
-      if (!trimmed.includes(".")) return;
-      setFeedValidation({ status: "loading" });
-      try {
-        const res = await fetch(`/api/validate-feed?url=${encodeURIComponent(trimmed)}`);
-        const data = await res.json();
-        if (data.valid) {
-          setFeedValidation({ status: "valid", feedUrl: data.feedUrl, title: data.title });
-        } else {
-          setFeedValidation({ status: "invalid" });
-        }
-      } catch {
-        setFeedValidation({ status: "invalid" });
-      }
-    }, 400);
+  function removeSubstackUrl(url: string) {
+    setStack((s) => {
+      const { [url]: _dropped, ...remaining } = s.feedTopics;
+      void _dropped;
+      return { ...s, substackFeeds: s.substackFeeds.filter((f) => f !== url), feedTopics: remaining };
+    });
   }
 
-  function addFromInspiration(src: InspirationSource) {
-    setStack((s) => mergeSourceIntoStack(s, src));
+  function addSubstackByUrl(url: string, topic?: TopicId) {
+    if (!url || stack.substackFeeds.includes(url)) return;
+    if (stack.substackFeeds.length >= SOURCE_LIMITS.substack) return;
+    setStack((s) => ({
+      ...s,
+      substackFeeds: [...s.substackFeeds, url],
+      feedTopics: topic ? { ...s.feedTopics, [url]: topic } : s.feedTopics,
+    }));
   }
 
-  const hasAnyBlock =
-    stack.weather || stack.stocks || stack.crypto || stack.subreddits.length > 0 || stack.hackerNews || stack.feeds.length > 0 || stack.substackFeeds.length > 0;
+  function addFromInspiration(src: InspirationSource, packLabel?: string) {
+    // Inspiration pack labels (Tech, Investing, etc.) align with RSS curated
+    // categories, so we can derive the topic and tag any non-curated additions.
+    const topic = packLabel ? rssCategoryToTopic(packLabel) ?? undefined : undefined;
+    setStack((s) => mergeSourceIntoStack(s, src, topic));
+  }
 
   const tickerCount = stack.stockTickers.split(",").map((t) => t.trim()).filter(Boolean).length;
   const coinCount = stack.cryptoCoins.split(",").map((c) => c.trim()).filter(Boolean).length;
@@ -1011,7 +1359,7 @@ export default function DashboardClient(props: Props) {
     if (key === "crypto") return stack.crypto;
     if (key === "reddit") return stack.subreddits.length > 0;
     if (key === "hacker_news") return stack.hackerNews;
-    if (key === "rss") return stack.rss && stack.feeds.length > 0;
+    if (key === "rss") return stack.feeds.length > 0;
     if (key === "substack") return stack.substackFeeds.length > 0;
     return false;
   });
@@ -1136,7 +1484,7 @@ export default function DashboardClient(props: Props) {
             </h2>
             <p className="text-waffle-brown/55 text-sm">
               {activeSectionOrder.length === 0
-                ? "Pick sources below, or tap ✨ Get Inspired for curated starter packs."
+                ? "Pick sources below, or use the guided setup to get started."
                 : "Add or remove sources below. Changes are saved when you hit Save."}
             </p>
           </div>
@@ -1147,14 +1495,7 @@ export default function DashboardClient(props: Props) {
               <div className="space-y-2">
                 <p className="font-bold text-waffle-brown">Welcome to WaffleStack!</p>
                 <p className="text-sm text-waffle-brown/65 leading-relaxed">
-                  Your digest is empty. Add a source below to get started, or use{" "}
-                  <button
-                    onClick={() => setInspiredOpen(true)}
-                    className="text-waffle-orange font-semibold underline underline-offset-2 hover:no-underline"
-                  >
-                    ✨ Get Inspired
-                  </button>{" "}
-                  to add a curated set of sources in one tap.
+                  Your digest is empty. Add sources below to build it manually, then save when it looks right.
                 </p>
               </div>
             </div>
@@ -1406,418 +1747,329 @@ export default function DashboardClient(props: Props) {
                   />
                 ))}
             </div>
-            <div className="space-y-1">
-              {limits.subreddits.full ? (
-                <p className="text-[11px] text-waffle-orange/80 px-1">
-                  Subreddit limit reached ({limits.subreddits.max}). Remove one to add another.
-                </p>
-              ) : (
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={stack.customSub}
-                  onChange={(e) => {
-                    setStack((s) => ({ ...s, customSub: e.target.value }));
-                    if (subCheck === "invalid") setSubCheck("idle");
-                  }}
-                  onKeyDown={(e) => e.key === "Enter" && addCustomSub()}
-                  placeholder="+ Add subreddit (e.g. r/cooking)"
-                  disabled={subCheck === "checking"}
-                  className="flex-1 border border-waffle-brown/15 rounded-xl px-4 py-2.5 text-sm bg-white text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:ring-2 focus:ring-waffle-orange disabled:opacity-50"
-                />
-                <button
-                  type="button"
-                  onClick={addCustomSub}
-                  disabled={subCheck === "checking"}
-                  className="px-4 py-2.5 bg-waffle-pale rounded-xl text-waffle-brown font-semibold text-sm hover:bg-waffle-golden/30 transition-colors disabled:opacity-50"
-                >
-                  {subCheck === "checking" ? "Checking…" : "Add"}
-                </button>
-              </div>
-              )}
-              {subCheck === "invalid" && (
-                <p className="text-xs text-red-500 px-1">
-                  r/{stack.customSub.trim().toLowerCase().replace(/^r\//, "")} doesn&apos;t exist on Reddit
-                </p>
-              )}
-            </div>
+            <SubredditAdder
+              onAdd={(name) => addSubredditByName(name)}
+              disabled={limits.subreddits.full}
+            />
           </section>
 
-          {/* Full-width sources */}
-          <section className="space-y-3">
-            <NodeCard
-                active={stack.rss}
-                onClick={() => {
-                  const wasOn = stack.rss;
-                  setStack((s) => ({ ...s, rss: !s.rss, feeds: s.rss ? [] : s.feeds, customFeed: "" }));
-                  if (wasOn) {
-                    setFeedValidation({ status: "idle" });
-                    setShowAllCuratedFeeds(false);
-                  }
-                }}
-                icon={<img src="/icons/rss_icon.png" width={20} height={20} alt="RSS" />}
-                label="RSS Feeds"
-              >
-                {stack.rss && (
-                  <div className="mt-3 space-y-3" onClick={(e) => e.stopPropagation()}>
+          {/* Topic blocks — discover sources by topic instead of by source type */}
+          {(() => {
+            const curatedRssForTopic = (topic: TopicId) =>
+              CURATED_FEEDS.filter((f) => rssCategoryToTopic(f.category) === topic);
+            const curatedSubstacksForTopic = (topic: TopicId) =>
+              CURATED_SUBSTACKS.filter((s) => substackCategoryToTopic(s.category) === topic);
+            const presetSubsForTopic = (topic: TopicId) =>
+              PRESET_SUBS.filter((s) => PRESET_SUBREDDIT_TOPICS[s] === topic);
 
-                    <div className="flex justify-end">
-                      <LimitBadge {...limits.rss} />
-                    </div>
+            const feedTopicOf = (url: string): TopicId | null => {
+              if (stack.feedTopics[url]) return stack.feedTopics[url] as TopicId;
+              const curated = CURATED_FEEDS.find((f) => f.url === url);
+              if (curated) return rssCategoryToTopic(curated.category);
+              return null;
+            };
+            const substackTopicOf = (url: string): TopicId | null => {
+              if (stack.feedTopics[url]) return stack.feedTopics[url] as TopicId;
+              const slug = url.match(/^https?:\/\/([^.]+)\.substack\.com/)?.[1];
+              const curated = CURATED_SUBSTACKS.find(
+                (s) => (s.feedUrl ?? `https://${s.slug}.substack.com/feed`) === url || s.slug === slug,
+              );
+              if (curated) return substackCategoryToTopic(curated.category);
+              return null;
+            };
+            const subredditTopicOf = (name: string): TopicId | null => {
+              if (stack.subredditTopics[name]) return stack.subredditTopics[name] as TopicId;
+              return PRESET_SUBREDDIT_TOPICS[name] ?? null;
+            };
 
-                    {/* Already-added feed chips */}
-                    {stack.feeds.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {stack.feeds.map((feed) => {
-                          const label = feedLabel(feed);
-                          const domain = (() => { try { return new URL(feed).hostname.replace(/^www\./, ""); } catch { return feed; } })();
+            const substackUrlOf = (s: { slug: string; feedUrl?: string }) =>
+              s.feedUrl ?? `https://${s.slug}.substack.com/feed`;
+
+            const renderTopic = (topic: TopicId) => {
+              const curatedRss = curatedRssForTopic(topic);
+              const curatedSubstacks = curatedSubstacksForTopic(topic);
+              const presetSubs = presetSubsForTopic(topic);
+              const curatedSubstackUrls = new Set(curatedSubstacks.map(substackUrlOf));
+
+              const customRss = stack.feeds.filter(
+                (url) =>
+                  stack.feedTopics[url] === topic &&
+                  !curatedRss.some((f) => f.url === url) &&
+                  !isSubstackFeedUrl(url),
+              );
+              const customSubstacks = stack.substackFeeds.filter(
+                (url) => stack.feedTopics[url] === topic && !curatedSubstackUrls.has(url),
+              );
+              const customSubs = stack.subreddits.filter(
+                (name) => stack.subredditTopics[name] === topic && !presetSubs.includes(name),
+              );
+
+              const count =
+                stack.feeds.filter((url) => feedTopicOf(url) === topic).length +
+                stack.substackFeeds.filter((url) => substackTopicOf(url) === topic).length +
+                stack.subreddits.filter((name) => subredditTopicOf(name) === topic).length;
+
+              const hasPublications = curatedRss.length > 0 || customRss.length > 0;
+              const hasNewsletters = curatedSubstacks.length > 0 || customSubstacks.length > 0;
+              const hasCommunities = presetSubs.length > 0 || customSubs.length > 0;
+
+              return (
+                <TopicCard
+                  key={topic}
+                  topic={topic}
+                  open={!!openTopics[topic]}
+                  count={count}
+                  onToggle={() => setOpenTopics((o) => ({ ...o, [topic]: !o[topic] }))}
+                >
+                  {/* Publications */}
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-bold text-waffle-brown/35 uppercase tracking-widest">Publications</p>
+                    {curatedRss.length > 0 && (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                        {curatedRss.map((feed) => {
+                          const alreadyAdded = stack.feeds.includes(feed.url);
                           return (
-                            <span
-                              key={feed}
-                              className="flex items-center gap-1.5 bg-waffle-pale rounded-lg px-2 py-1 text-xs text-waffle-brown/70 max-w-[160px]"
+                            <button
+                              key={feed.url}
+                              onClick={() =>
+                                alreadyAdded ? removeFeedUrl(feed.url) : addFeedUrl(feed.url)
+                              }
+                              className={`flex flex-col gap-1.5 p-2 rounded-xl border text-left transition-colors cursor-pointer ${
+                                alreadyAdded
+                                  ? "border-waffle-orange/40 bg-waffle-orange/5 hover:border-waffle-orange/60 hover:bg-waffle-orange/10"
+                                  : "border-waffle-brown/10 bg-white hover:border-waffle-orange/30 hover:bg-waffle-pale"
+                              }`}
+                              aria-label={alreadyAdded ? `Remove ${feed.name}` : `Add ${feed.name}`}
                             >
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={`https://www.google.com/s2/favicons?domain=${domain}&sz=16`}
-                                width={12}
-                                height={12}
-                                alt=""
-                                className="flex-shrink-0 rounded-sm"
-                              />
-                              <span className="truncate">{label}</span>
-                              <button
-                                onClick={() => setStack((s) => ({ ...s, feeds: s.feeds.filter((f) => f !== feed) }))}
-                                className="text-waffle-brown/30 hover:text-red-500 transition-colors flex-shrink-0 leading-none"
-                                aria-label={`Remove ${label}`}
-                              >
-                                ×
-                              </button>
-                            </span>
+                              <div className="flex items-center justify-between gap-1">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={`https://www.google.com/s2/favicons?domain=${feed.domain}&sz=32`}
+                                  width={16}
+                                  height={16}
+                                  alt=""
+                                  className="rounded-sm flex-shrink-0"
+                                />
+                                <span
+                                  className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
+                                    alreadyAdded
+                                      ? "bg-waffle-orange/15 text-waffle-orange"
+                                      : "bg-waffle-brown/8 text-waffle-brown/40"
+                                  }`}
+                                >
+                                  {alreadyAdded ? "✓" : "+"}
+                                </span>
+                              </div>
+                              <p className="text-[11px] font-bold text-waffle-brown leading-tight truncate">{feed.name}</p>
+                              <p className="text-[10px] text-waffle-brown/45 leading-tight line-clamp-2">{feed.description}</p>
+                            </button>
                           );
                         })}
                       </div>
                     )}
-
-                    {/* URL input with validation */}
-                    {limits.rss.full ? (
-                      <p className="text-[11px] text-waffle-orange/80 px-1">
-                        Feed limit reached ({limits.rss.max}). Remove one to add another.
-                      </p>
-                    ) : (
-                    <div className="space-y-1.5">
-                      <div className="flex items-center gap-1.5">
-                        <div className="relative flex-1">
-                          <input
-                            type="url"
-                            value={stack.customFeed}
-                            onChange={(e) => handleFeedInputChange(e.target.value)}
-                            onKeyDown={(e) => e.key === "Enter" && feedValidation.status === "valid" && addValidatedFeed()}
-                            placeholder="Paste a feed or website URL…"
-                            className="w-full border border-waffle-brown/15 rounded-xl px-3 py-2 text-xs text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:ring-2 focus:ring-waffle-orange bg-white pr-7"
-                          />
-                          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
-                            {feedValidation.status === "loading" && (
-                              <svg className="animate-spin w-3.5 h-3.5 text-waffle-brown/40" viewBox="0 0 24 24" fill="none">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                              </svg>
-                            )}
-                            {feedValidation.status === "valid" && <span className="text-green-500 text-xs font-bold">✓</span>}
-                            {feedValidation.status === "invalid" && <span className="text-red-400 text-xs font-bold">✕</span>}
-                          </span>
-                        </div>
-                        {feedValidation.status === "valid" && (
-                          <button
-                            onClick={addValidatedFeed}
-                            className="px-3 py-2 bg-waffle-orange text-white text-xs font-semibold rounded-xl hover:bg-waffle-orange/90 transition-colors flex-shrink-0"
-                          >
-                            Add
-                          </button>
-                        )}
-                      </div>
-                      {feedValidation.status === "valid" && (
-                        <p className="text-[11px] text-green-600 px-1 truncate">
-                          Feed found{feedValidation.title ? `: ${feedValidation.title}` : ""}
-                        </p>
-                      )}
-                      {feedValidation.status === "invalid" && (
-                        <p className="text-[11px] text-red-500 px-1">No RSS feed found at this URL</p>
-                      )}
-                    </div>
-                    )}
-
-                    {/* Divider */}
-                    <div className="border-t border-waffle-brown/10" />
-
-                    {/* Popular feeds */}
-                    <div className="space-y-2">
-                      <p className="text-[10px] font-bold text-waffle-brown/35 uppercase tracking-widest">Popular feeds</p>
-
-                      {/* Category tabs */}
-                      <div className="flex gap-1 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-                        {CURATED_CATEGORIES.map((cat) => (
-                          <button
-                            key={cat}
-                            onClick={() => { setCuratedCategory(cat); setShowAllCuratedFeeds(false); }}
-                            className={`flex-shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
-                              curatedCategory === cat
-                                ? "bg-waffle-orange text-white"
-                                : "bg-waffle-pale text-waffle-brown/55 hover:bg-waffle-golden/30"
-                            }`}
-                          >
-                            <span>{CATEGORY_EMOJI[cat]}</span>
-                            <span>{cat}</span>
-                          </button>
+                    {customRss.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {customRss.map((url) => (
+                          <CustomFeedChip key={url} url={url} onRemove={() => removeFeedUrl(url)} />
                         ))}
                       </div>
-
-                      {/* Feed grid */}
-                      {(() => {
-                        const filtered = CURATED_FEEDS.filter(
-                          (f) => curatedCategory === "All" || f.category === curatedCategory
-                        );
-                        const visible = showAllCuratedFeeds
-                          ? filtered
-                          : filtered.slice(0, CURATED_FEEDS_INITIAL_COUNT);
-                        return (
-                          <>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                              {visible.map((feed) => {
-                                const alreadyAdded = stack.feeds.includes(feed.url);
-                                return (
-                                  <button
-                                    key={feed.url}
-                                    onClick={() => {
-                                      if (alreadyAdded) {
-                                        setStack((s) => ({ ...s, feeds: s.feeds.filter((f) => f !== feed.url) }));
-                                      } else {
-                                        addFeedUrl(feed.url);
-                                      }
-                                    }}
-                                    className={`flex flex-col gap-1.5 p-2 rounded-xl border text-left transition-colors cursor-pointer ${
-                                      alreadyAdded
-                                        ? "border-waffle-orange/40 bg-waffle-orange/5 hover:border-waffle-orange/60 hover:bg-waffle-orange/10"
-                                        : "border-waffle-brown/10 bg-white hover:border-waffle-orange/30 hover:bg-waffle-pale"
-                                    }`}
-                                    aria-label={alreadyAdded ? `Remove ${feed.name}` : `Add ${feed.name}`}
-                                  >
-                                    <div className="flex items-center justify-between gap-1">
-                                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                                      <img
-                                        src={`https://www.google.com/s2/favicons?domain=${feed.domain}&sz=32`}
-                                        width={16}
-                                        height={16}
-                                        alt=""
-                                        className="rounded-sm flex-shrink-0"
-                                      />
-                                      <span
-                                        className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 transition-colors ${
-                                          alreadyAdded
-                                            ? "bg-waffle-orange/15 text-waffle-orange"
-                                            : "bg-waffle-brown/8 text-waffle-brown/40 group-hover:bg-waffle-orange group-hover:text-white"
-                                        }`}
-                                      >
-                                        {alreadyAdded ? "✓" : "+"}
-                                      </span>
-                                    </div>
-                                    <p className="text-[11px] font-bold text-waffle-brown leading-tight truncate">{feed.name}</p>
-                                    <p className="text-[10px] text-waffle-brown/45 leading-tight line-clamp-2">{feed.description}</p>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                            {filtered.length > CURATED_FEEDS_INITIAL_COUNT && (
-                              <button
-                                onClick={() => setShowAllCuratedFeeds((v) => !v)}
-                                className="w-full text-[11px] font-semibold text-waffle-brown/45 hover:text-waffle-orange transition-colors py-1.5 rounded-lg hover:bg-waffle-pale"
-                              >
-                                {showAllCuratedFeeds ? "Show less" : `Show all ${filtered.length} feeds`}
-                              </button>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </div>
-
-                  </div>
-                )}
-            </NodeCard>
-
-              <NodeCard
-                active={stack.substackFeeds.length > 0}
-                onClick={() => {
-                  if (stack.substackFeeds.length > 0) {
-                    setStack((s) => ({ ...s, substackFeeds: [] }));
-                  }
-                }}
-                icon={<img src="/icons/substack.png" width={20} height={20} alt="Substack" />}
-                label="Substack"
-              >
-                <div className="mt-2 space-y-3" onClick={(e) => e.stopPropagation()}>
-
-                  <div className="flex justify-end">
-                    <LimitBadge {...limits.substack} />
+                    )}
+                    {!hasPublications && curatedRss.length === 0 && (
+                      <p className="text-[11px] text-waffle-brown/35 italic">No curated feeds for this topic yet — paste a URL below to add your own.</p>
+                    )}
+                    <RssAdder onAdd={(url) => addFeedUrl(url, topic)} disabled={limits.rss.full} />
                   </div>
 
-                  {/* Popular newsletters */}
+                  {/* Newsletters */}
                   <div className="space-y-2">
-                    <p className="text-[10px] font-bold text-waffle-brown/35 uppercase tracking-widest">Popular newsletters</p>
-
-                    {/* Category tabs */}
-                    <div className="flex gap-1 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-                      {SUBSTACK_CATEGORIES.map((cat) => (
-                        <button
-                          key={cat}
-                          onClick={() => { setSubstackCategory(cat); setShowAllSubstacks(false); }}
-                          className={`flex-shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
-                            substackCategory === cat
-                              ? "bg-waffle-orange text-white"
-                              : "bg-waffle-pale text-waffle-brown/55 hover:bg-waffle-golden/30"
-                          }`}
-                        >
-                          <span>{SUBSTACK_CATEGORY_EMOJI[cat]}</span>
-                          <span>{cat}</span>
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Newsletter grid */}
-                    {(() => {
-                      const filtered = CURATED_SUBSTACKS.filter(
-                        (s) => substackCategory === "All" || s.category === substackCategory
-                      );
-                      const visible = showAllSubstacks
-                        ? filtered
-                        : filtered.slice(0, CURATED_SUBSTACKS_INITIAL_COUNT);
-                      const defaultFeedUrl = (slug: string) => `https://${slug}.substack.com/feed`;
-                      return (
-                        <>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                            {visible.map((item) => {
-                              const url = item.feedUrl ?? defaultFeedUrl(item.slug);
-                              const alreadyAdded = stack.substackFeeds.includes(url);
-                              return (
-                                <button
-                                  key={item.slug}
-                                  onClick={() => {
-                                    if (alreadyAdded) {
-                                      setStack((s) => ({ ...s, substackFeeds: s.substackFeeds.filter((f) => f !== url) }));
-                                    } else {
-                                      setStack((s) =>
-                                        s.substackFeeds.length >= SOURCE_LIMITS.substack
-                                          ? s
-                                          : { ...s, substackFeeds: [...s.substackFeeds, url] }
-                                      );
-                                    }
-                                  }}
-                                  className={`flex flex-col gap-1.5 p-2 rounded-xl border text-left transition-colors cursor-pointer ${
-                                    alreadyAdded
-                                      ? "border-waffle-orange/40 bg-waffle-orange/5 hover:border-waffle-orange/60 hover:bg-waffle-orange/10"
-                                      : "border-waffle-brown/10 bg-white hover:border-waffle-orange/30 hover:bg-waffle-pale"
-                                  }`}
-                                  aria-label={alreadyAdded ? `Remove ${item.name}` : `Add ${item.name}`}
-                                >
-                                  <div className="flex items-center justify-between gap-1">
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img
-                                      src={`https://www.google.com/s2/favicons?domain=${item.faviconDomain ?? `${item.slug}.substack.com`}&sz=32`}
-                                      width={16}
-                                      height={16}
-                                      alt=""
-                                      className="rounded-sm flex-shrink-0"
-                                    />
-                                    <span
-                                      className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 transition-colors ${
-                                        alreadyAdded
-                                          ? "bg-waffle-orange/15 text-waffle-orange"
-                                          : "bg-waffle-brown/8 text-waffle-brown/40"
-                                      }`}
-                                    >
-                                      {alreadyAdded ? "✓" : "+"}
-                                    </span>
-                                  </div>
-                                  <p className="text-[11px] font-bold text-waffle-brown leading-tight truncate">{item.name}</p>
-                                  <p className="text-[10px] text-waffle-brown/45 leading-tight line-clamp-2">{item.description}</p>
-                                </button>
-                              );
-                            })}
-                          </div>
-                          {filtered.length > CURATED_SUBSTACKS_INITIAL_COUNT && (
+                    <p className="text-[10px] font-bold text-waffle-brown/35 uppercase tracking-widest">Newsletters</p>
+                    {curatedSubstacks.length > 0 && (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                        {curatedSubstacks.map((item) => {
+                          const url = substackUrlOf(item);
+                          const alreadyAdded = stack.substackFeeds.includes(url);
+                          return (
                             <button
-                              onClick={() => setShowAllSubstacks((v) => !v)}
-                              className="w-full text-[11px] font-semibold text-waffle-brown/45 hover:text-waffle-orange transition-colors py-1.5 rounded-lg hover:bg-waffle-pale"
+                              key={item.slug}
+                              onClick={() =>
+                                alreadyAdded ? removeSubstackUrl(url) : addSubstackByUrl(url)
+                              }
+                              className={`flex flex-col gap-1.5 p-2 rounded-xl border text-left transition-colors cursor-pointer ${
+                                alreadyAdded
+                                  ? "border-waffle-orange/40 bg-waffle-orange/5 hover:border-waffle-orange/60 hover:bg-waffle-orange/10"
+                                  : "border-waffle-brown/10 bg-white hover:border-waffle-orange/30 hover:bg-waffle-pale"
+                              }`}
+                              aria-label={alreadyAdded ? `Remove ${item.name}` : `Add ${item.name}`}
                             >
-                              {showAllSubstacks ? "Show less" : `Show all ${filtered.length} newsletters`}
+                              <div className="flex items-center justify-between gap-1">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={`https://www.google.com/s2/favicons?domain=${item.faviconDomain ?? `${item.slug}.substack.com`}&sz=32`}
+                                  width={16}
+                                  height={16}
+                                  alt=""
+                                  className="rounded-sm flex-shrink-0"
+                                />
+                                <span
+                                  className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
+                                    alreadyAdded
+                                      ? "bg-waffle-orange/15 text-waffle-orange"
+                                      : "bg-waffle-brown/8 text-waffle-brown/40"
+                                  }`}
+                                >
+                                  {alreadyAdded ? "✓" : "+"}
+                                </span>
+                              </div>
+                              <p className="text-[11px] font-bold text-waffle-brown leading-tight truncate">{item.name}</p>
+                              <p className="text-[10px] text-waffle-brown/45 leading-tight line-clamp-2">{item.description}</p>
                             </button>
-                          )}
-                        </>
-                      );
-                    })()}
+                          );
+                        })}
+                      </div>
+                    )}
+                    {customSubstacks.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {customSubstacks.map((url) => (
+                          <CustomFeedChip
+                            key={url}
+                            url={url}
+                            onRemove={() => removeSubstackUrl(url)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                    {!hasNewsletters && (
+                      <p className="text-[11px] text-waffle-brown/35 italic">No curated Substacks for this topic yet — add by slug below.</p>
+                    )}
+                    <SubstackAdder
+                      onAdd={(slug) => addSubstackBySlug(slug, topic)}
+                      disabled={limits.substack.full}
+                    />
                   </div>
 
-                  {/* Manual entry */}
+                  {/* Communities */}
                   <div className="space-y-2">
-                    <p className="text-[10px] font-bold text-waffle-brown/35 uppercase tracking-widest">Add your own</p>
-                    {stack.substackFeeds.map((url) => {
-                      const slug = url.match(/https?:\/\/([^.]+)\.substack\.com/)?.[1] ?? url;
-                      // Only show custom ones (not in the curated list)
-                      const isCurated = CURATED_SUBSTACKS.some(
-                        (s) => s.feedUrl === url || s.slug === slug
-                      );
-                      if (isCurated) return null;
-                      return (
-                        <div
-                          key={url}
-                          className="flex items-center justify-between gap-1 text-xs text-waffle-brown/60 bg-waffle-pale rounded-lg px-2 py-1.5"
-                        >
-                          <span className="truncate font-medium">{slug}</span>
-                          <button
-                            onClick={() => setStack((s) => ({ ...s, substackFeeds: s.substackFeeds.filter((f) => f !== url) }))}
-                            className="text-waffle-brown/30 hover:text-red-500 transition-colors flex-shrink-0 leading-none"
-                            aria-label={`Remove ${slug}`}
+                    <p className="text-[10px] font-bold text-waffle-brown/35 uppercase tracking-widest">Communities</p>
+                    {(presetSubs.length > 0 || customSubs.length > 0) && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {presetSubs.map((sub) => {
+                          const added = stack.subreddits.includes(sub);
+                          return (
+                            <button
+                              key={sub}
+                              onClick={() => toggleSub(sub)}
+                              className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                                added
+                                  ? "bg-waffle-orange/10 text-waffle-orange border border-waffle-orange/30"
+                                  : "bg-waffle-pale text-waffle-brown/60 border border-transparent hover:bg-waffle-golden/30"
+                              }`}
+                            >
+                              <img src="/icons/reddit.png" width={12} height={12} alt="" className="rounded-full" />
+                              r/{sub}
+                              <span className="text-[10px]">{added ? "✓" : "+"}</span>
+                            </button>
+                          );
+                        })}
+                        {customSubs.map((sub) => (
+                          <span
+                            key={sub}
+                            className="flex items-center gap-1.5 bg-waffle-orange/10 text-waffle-orange border border-waffle-orange/30 px-2 py-1 rounded-lg text-xs font-semibold"
                           >
-                            ×
-                          </button>
-                        </div>
-                      );
-                    })}
-                    {limits.substack.full ? (
-                      <p className="text-[11px] text-waffle-orange/80 px-0.5">
-                        Newsletter limit reached ({limits.substack.max}). Remove one to add another.
-                      </p>
-                    ) : (
-                    <div className="flex gap-1.5">
-                      <input
-                        type="text"
-                        value={substackInput}
-                        onChange={(e) => {
-                          setSubstackInput(e.target.value);
-                          if (substackCheck === "invalid") setSubstackCheck("idle");
-                        }}
-                        onKeyDown={(e) => e.key === "Enter" && addSubstack()}
-                        disabled={substackCheck === "checking"}
-                        placeholder="e.g. paulgraham"
-                        className="flex-1 border-b border-waffle-brown/20 bg-transparent text-xs text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:border-waffle-orange py-1 disabled:opacity-50"
-                      />
-                      <button
-                        onClick={addSubstack}
-                        disabled={substackCheck === "checking"}
-                        className="text-xs font-semibold text-waffle-orange disabled:opacity-50"
-                      >
-                        {substackCheck === "checking" ? "Checking…" : "Add"}
-                      </button>
-                    </div>
+                            <img src="/icons/reddit.png" width={12} height={12} alt="" className="rounded-full" />
+                            r/{sub}
+                            <button
+                              onClick={() => removeSubreddit(sub)}
+                              className="text-waffle-orange/50 hover:text-red-500 leading-none"
+                              aria-label={`Remove r/${sub}`}
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
                     )}
-                    {substackCheck === "invalid" && (
-                      <p className="text-xs text-red-500 px-0.5">
-                        No Substack found at {substackInput.trim().toLowerCase().replace(/^https?:\/\//, "").split(".")[0]}.substack.com
-                      </p>
+                    {!hasCommunities && (
+                      <p className="text-[11px] text-waffle-brown/35 italic">No preset communities for this topic — add a subreddit below.</p>
                     )}
+                    <SubredditAdder
+                      onAdd={(name) => addSubredditByName(name, topic)}
+                      disabled={limits.subreddits.full}
+                    />
                   </div>
+                </TopicCard>
+              );
+            };
 
+            // Untagged customs (no topic; no curated match) live in Custom / Other.
+            const otherFeeds = stack.feeds.filter(
+              (url) => !stack.feedTopics[url] && !CURATED_FEEDS.some((f) => f.url === url),
+            );
+            const otherSubstacks = stack.substackFeeds.filter((url) => {
+              if (stack.feedTopics[url]) return false;
+              const slug = url.match(/^https?:\/\/([^.]+)\.substack\.com/)?.[1];
+              return !CURATED_SUBSTACKS.some(
+                (s) => substackUrlOf(s) === url || s.slug === slug,
+              );
+            });
+            const otherCount = otherFeeds.length + otherSubstacks.length;
+            const otherOpen = !!openTopics.__other;
+
+            return (
+              <section className="space-y-4">
+                <h3 className="text-xs font-bold text-waffle-brown/40 uppercase tracking-widest flex items-center gap-2">
+                  <img src="/icons/rss_icon.png" width={14} height={14} alt="" /> Topics
+                  <span className="ml-auto"><LimitBadge {...limits.rss} /></span>
+                </h3>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  {TOPIC_IDS.map(renderTopic)}
                 </div>
-              </NodeCard>
-          </section>
+
+                {/* Custom / Other — untagged feeds users pasted themselves */}
+                <div
+                  className={`rounded-2xl border transition-colors ${
+                    otherCount > 0
+                      ? "border-waffle-brown/20 bg-waffle-pale/50"
+                      : "border-waffle-brown/10 bg-white"
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setOpenTopics((o) => ({ ...o, __other: !o.__other }))}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left"
+                  >
+                    <span className="text-lg leading-none">📦</span>
+                    <span className="flex-1 font-semibold text-sm text-waffle-brown">Custom / Other</span>
+                    {otherCount > 0 && (
+                      <span className="text-[10px] font-bold bg-waffle-brown/10 text-waffle-brown/60 px-1.5 py-0.5 rounded-md tabular-nums">
+                        {otherCount} source{otherCount !== 1 ? "s" : ""}
+                      </span>
+                    )}
+                    <span className="text-waffle-brown/30 text-xs">{otherOpen ? "▾" : "▸"}</span>
+                  </button>
+                  {otherOpen && (
+                    <div className="px-4 pb-4 space-y-3">
+                      {otherFeeds.length === 0 && otherSubstacks.length === 0 ? (
+                        <p className="text-[11px] text-waffle-brown/35 italic">
+                          Anything you paste here lives outside the topic blocks. Use this for one-off feeds that don&apos;t fit a topic.
+                        </p>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                          {otherFeeds.map((url) => (
+                            <CustomFeedChip key={url} url={url} onRemove={() => removeFeedUrl(url)} />
+                          ))}
+                          {otherSubstacks.map((url) => (
+                            <CustomFeedChip key={url} url={url} onRemove={() => removeSubstackUrl(url)} />
+                          ))}
+                        </div>
+                      )}
+                      <RssAdder onAdd={(url) => addFeedUrl(url)} disabled={limits.rss.full} />
+                    </div>
+                  )}
+                </div>
+              </section>
+            );
+          })()}
+
         </div>
 
         {/* Right: digest summary sidebar */}
@@ -2000,7 +2252,7 @@ export default function DashboardClient(props: Props) {
       {/* ── Guided first-run setup ── */}
       {showSetupOverlay && (
         <div className="fixed inset-0 z-50 bg-waffle-brown/30 backdrop-blur-sm flex items-center justify-center px-4 py-6">
-          <section className="w-full max-w-2xl max-h-[92vh] overflow-y-auto bg-waffle-cream border border-waffle-brown/15 rounded-2xl shadow-2xl">
+          <section className="w-full max-w-2xl max-h-[92vh] overflow-visible bg-waffle-cream border border-waffle-brown/15 rounded-2xl shadow-2xl">
             <div className="px-5 sm:px-7 pt-6 pb-4 border-b border-waffle-brown/10">
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -2058,7 +2310,7 @@ export default function DashboardClient(props: Props) {
                       className="w-full border border-waffle-brown/15 rounded-xl px-4 py-3 text-sm bg-white text-waffle-brown placeholder-waffle-brown/30 focus:outline-none focus:ring-2 focus:ring-waffle-orange"
                     />
                     {cityDropdownOpen && (
-                      <ul className="absolute left-0 right-0 top-full z-50 bg-white border border-waffle-brown/15 rounded-xl shadow-lg overflow-hidden mt-1">
+                      <ul className="absolute left-0 right-0 top-full z-[80] bg-white border border-waffle-brown/15 rounded-xl shadow-lg overflow-hidden mt-1">
                         {cityResults.map((r) => (
                           <li key={r.label}>
                             <button
@@ -2257,7 +2509,7 @@ export default function DashboardClient(props: Props) {
                   key={pack.label}
                   pack={pack}
                   stack={stack}
-                  onAdd={addFromInspiration}
+                  onAdd={(src) => addFromInspiration(src, pack.label)}
                 />
               ))}
             </div>

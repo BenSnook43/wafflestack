@@ -14,7 +14,7 @@ export async function PATCH(req: NextRequest) {
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ error: "Invalid request." }, { status: 400 });
 
-  const { location, subreddits, stocks, crypto, rss_feeds, hacker_news, section_order, active } = body;
+  const { location, subreddits, stocks, crypto, rss_feeds, hacker_news, section_order, settings, active } = body;
 
   const violation = checkSourceLimits({ subreddits, stocks, crypto, rss_feeds });
   if (violation) {
@@ -43,6 +43,20 @@ export async function PATCH(req: NextRequest) {
       .eq("id", userRecord.id);
   }
 
+  // If settings was sent, shallow-merge with the existing row so we don't clobber
+  // unrelated top-level keys (the dashboard only owns feed_topics / subreddit_topics
+  // today, but settings is reserved per CLAUDE.md for any future non-connector prefs).
+  let mergedSettings: Record<string, unknown> | null = null;
+  if (settings && typeof settings === "object") {
+    const { data: existing } = await supabase
+      .from("preferences")
+      .select("settings")
+      .eq("user_id", userRecord.id)
+      .single();
+    const current = (existing?.settings ?? {}) as Record<string, unknown>;
+    mergedSettings = { ...current, ...(settings as Record<string, unknown>) };
+  }
+
   // Upsert preferences (creates row if first save after signup)
   const updates: Record<string, unknown> = {
     user_id: userRecord.id,
@@ -55,6 +69,7 @@ export async function PATCH(req: NextRequest) {
   if (Array.isArray(rss_feeds)) updates.rss_feeds = rss_feeds;
   if (typeof hacker_news === "boolean") updates.hacker_news = hacker_news;
   if (Array.isArray(section_order)) updates.section_order = section_order;
+  if (mergedSettings) updates.settings = mergedSettings;
 
   const { error: prefErr } = await supabase
     .from("preferences")
